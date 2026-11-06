@@ -1,5 +1,282 @@
 ---
-title: "Functions"
+title: Functions
+description: Giving a piece of work a name so you can run it from anywhere, and what the computer does in memory each time you do.
 ---
+import Scene from '../../../components/Scene.astro';
+import Check from '../../../components/Check.astro';
+import ReadTheDocs from '../../../components/ReadTheDocs.astro';
+import Term from '../../../components/Term.astro';
+import T from '../../../components/T.astro';
+import Hl from '../../../components/Hl.astro';
 
-This page is being written.
+Suppose the left and right sides of a drive each get a speed, and a motor can only take values from 0 to 100. Keeping a number inside that range takes two `if` statements, and now there are two sides:
+
+```cpp
+int leftSpeed = 140;
+int rightSpeed = -20;
+
+if(leftSpeed > 100) {
+    leftSpeed = 100;
+}
+if(leftSpeed < 0) {
+    leftSpeed = 0;
+}
+
+if(rightSpeed > 100) {
+    rightSpeed = 100;
+}
+if(rightSpeed < 0) {
+    rightSpeed = 0;
+}
+```
+
+The second half is a copy of the first with one name changed. Add an arm and an intake and it's four copies. Copies drift apart: someone fixes a typo in three of them, and the fourth keeps its bug. Code that repeats itself is the signal to stop and give the repeated piece a name.
+
+## Why functions exist
+
+A <Term id="function">function</Term> is a named block of code that you can run from anywhere by using its name. It is the same idea as a variable, which names a box in memory, applied to code instead of data. Three things come from it.
+
+The first is no repetition. The clamping logic exists once, and every place that needs it uses the name. A bug gets fixed once.
+
+The second is that you can read the code by what it does. `speed = clamp(speed, 0, 100);` says what is happening without making you read six lines to find out. This is <Term id="abstraction">abstraction</Term>: hiding how something works behind a simple name, so you can use it without thinking about the details. Every layer of a robot program is built this way. You will spend the next chapters calling functions that other people wrote, and you'll never read their insides.
+
+The third is that each function can be tested and understood alone, which matters once a program has thousands of lines. The learncpp article on [why functions are useful](https://www.learncpp.com/cpp-tutorial/why-functions-are-useful-and-how-to-use-them-effectively/) makes the same case from another angle.
+
+## Your first function
+
+Here is the function, and a complete program that uses it. Like on the earlier pages, you can run it with [Trying code without a robot](../variables-types-scope/#trying-code-without-a-robot). A function goes outside `main`, above it, instead of inside its braces.
+
+```cpp
+#include <iostream>
+
+int clamp(int value, int low, int high) {
+    if(value < low) {
+        return low;
+    }
+
+    if(value > high) {
+        return high;
+    }
+
+    return value;
+}
+
+int main() {
+    std::cout << clamp(140, 0, 100) << "\n";    // 100
+    std::cout << clamp(-5, 0, 100) << "\n";     // 0
+    std::cout << clamp(60, 0, 100) << "\n";     // 60
+
+    return 0;
+}
+```
+
+Read the first line from left to right. `int` is the type of the answer the function gives back. `clamp` is the name. The parentheses list the inputs, each one a type and a name, like a variable declaration. The braces hold the body.
+
+Each input is a <Term id="parameter">parameter</Term>: a variable that exists only inside the function and starts out holding whatever the caller gave it. The values the caller gives are the <Term id="argument">arguments</Term>. In `clamp(140, 0, 100)`, the numbers 140, 0 and 100 are arguments, and `value`, `low` and `high` are the parameters that receive them, matched by position. People mix the two words up constantly. A parameter is the name in the definition. An argument is the value in the call.
+
+Using the function is a <Term id="call">call</Term>. The call is an expression, like the ones on [Math and Decisions](../math-and-decisions/#expressions), and its value is whatever the function hands back. That handed-back answer is the <Term id="return-value">return value</Term>. The `return` statement does two things at once: it picks the value, and it ends the function on the spot, so any lines after it in that path never run. A function can have several `return`s, as `clamp` does.
+
+The arguments are checked against the parameter types. Pass `3.9` to an `int` parameter and it is converted to 3, silently, the same <T id="implicit-conversion">implicit conversion</T> as before. The learncpp article on [parameters and arguments](https://www.learncpp.com/cpp-tutorial/introduction-to-function-parameters-and-arguments/) goes through the rules.
+
+## Tracing a call
+
+Press play and follow the highlighted line.
+
+<Scene name="cpp-foundations/call-trace">
+Watch where the highlight goes after the call. Then step back and look at which boxes exist at each moment, and which don't.
+</Scene>
+
+The picture makes one thing visible that the code hides: running a function is a jump. Inside a Computer described the <T id="program-counter">program counter</T> stepping through instructions one by one. A call sets it to the first instruction of the function, which is why the highlight leaps up the page, and a `return` sets it back to the instruction after the call. For that to work, the spot to come back to has to be saved somewhere when the call happens. The section on the call stack below says where.
+
+If a function ends without reaching any `return`, and its type isn't `void`, the result is <T id="undefined-behavior">undefined behavior</T>. The compiler can warn about it (g++ does, with `-Wall`), and it's a real bug: the caller receives whatever was left in the place the answer was supposed to go. `main` is the one exception, and falling off its end counts as `return 0;`.
+
+A function like `clamp` is the first of many you'll reuse. When you build a PID controller, its output has to be limited to the range a motor accepts, 12000 millivolts either way, and it is this same function with different numbers.
+
+## Functions that return nothing
+
+Some work has an effect and no answer. Printing a message does something, but there's nothing to give back. For that, the return type is `void`, and such a function is a <Term id="void-function">void function</Term>.
+
+```cpp
+void printStatus(int batteryPercent) {
+    if(batteryPercent < 20) {
+        std::cout << "low\n";
+        return;
+    }
+
+    std::cout << "ok\n";
+}
+```
+
+A bare `return;` still ends the function early, which is a tidy way to skip the rest when a check fails. The call is a statement by itself, `printStatus(15);`, because there's no value to use. Nearly everything you tell a robot to do in the next chapter, spinning a motor or printing to the screen, is a call to a function like this one.
+
+## Declaring before calling
+
+The compiler reads a file from top to bottom, so a function has to be known before the line that calls it. Call a function that appears further down and you get an error like this from g++:
+
+```
+error: 'triple' was not declared in this scope
+```
+
+One fix is to move the definition higher. The other is to put a <Term id="function-declaration">function declaration</Term> above the call: the first line of the function, ending in a semicolon, with no body.
+
+```cpp
+int triple(int x);    // declaration: promises it exists
+
+int main() {
+    return triple(4);
+}
+
+int triple(int x) {    // definition: the actual code
+    return x * 3;
+}
+```
+
+The declaration tells the compiler everything it needs to check calls: the name, the parameter types and the return type. The body can come later, even in a different file, which is how programs get split up. [Splitting code across files](../../bigger-programs/multiple-files/) builds on exactly this, and the learncpp article on [forward declarations](https://www.learncpp.com/cpp-tutorial/forward-declarations/) shows the pattern.
+
+The part of a declaration that identifies a function is its <Term id="function-signature">signature</Term>: the name and the parameter types. Parameter names are only for the reader, and a declaration may leave them out.
+
+## Pass by value
+
+Here's a puzzle. Earlier pages showed that `score = score + 5;` changes `score`. What if that line moves into a function?
+
+```cpp
+#include <iostream>
+
+void addPoints(int points) {
+    points = points + 5;
+}
+
+int main() {
+    int score = 10;
+    addPoints(score);
+
+    std::cout << score << "\n";    // 10
+
+    return 0;
+}
+```
+
+It prints 10. Nothing is wrong with the function, and it did add 5 to something. The animation shows to what.
+
+<Scene name="cpp-foundations/pass-by-value">
+Step through and watch the arrow. Where does the 15 end up, and what happens to it when the function ends?
+</Scene>
+
+This is <Term id="pass-by-value">pass by value</Term>. The parameter is a brand new variable, and the call copies the argument's value into it. After that the two boxes have nothing to do with each other, just like `saved` and `score` on the [first page's](../variables-types-scope/#declaring-initializing-assigning) copying example. The function worked on its copy, and the copy was thrown away when the function ended, as any <T id="local-variable">local variable</T> is at its closing brace. A parameter is a local variable that starts out filled in.
+
+That's usually what you want. A function can do anything it likes to its parameters without risk to the caller's variables, and the caller doesn't need to read the function to know its variables are safe. When you do want a result, `return` it:
+
+```cpp
+int addPoints(int points) {
+    return points + 5;
+}
+```
+
+Then in `main`, `score = addPoints(score);` stores the answer back into the caller's own box.
+
+Returning works for one value. It doesn't help when a function should update several variables, or when the thing being copied is large: copying a `double` is free for practical purposes, but a type with a thousand values inside copies all thousand on every call. Both problems have the same answer, a way to give the function the original box and not a copy. That's the next page.
+
+## Same name, different parameters
+
+You can write two functions with the same name if their parameters differ. This is <Term id="overloading">overloading</Term>.
+
+```cpp
+int half(int n) {
+    return n / 2;
+}
+
+double half(double n) {
+    return n / 2;
+}
+```
+
+Now `half(7)` is 3 and `half(7.0)` is 3.5. The compiler picks the version by looking at the argument types at the call, and it settles this while compiling, so overloading costs nothing at run time. Internally each version gets a distinct name that encodes its parameter types: g++ for ARM calls these two `_Z4halfi` and `_Z4halfd`. That's why the signature is the name plus the parameter types and not the return type. Two functions that differ only in their return type can't coexist, since the call site has no way to say which one it wants.
+
+Overloading is also where things go wrong. Call `half(7L)` with a `long`, which is an exact match for neither version, and both conversions look equally good, so g++ stops with `call of overloaded 'half(long int)' is ambiguous`. When a call is ambiguous, cast the argument to the type you mean. The full ranking rules are on cppreference's [overload resolution](https://en.cppreference.com/cpp/language/overload_resolution) page, and the learncpp pages on [differentiating overloads](https://www.learncpp.com/cpp-tutorial/function-overload-differentiation/) and [ambiguous matches](https://www.learncpp.com/cpp-tutorial/function-overload-resolution-and-ambiguous-matches/) are the gentler version. PROS uses overloading too: the motor class has more than one constructor, and the compiler picks between them by the arguments you pass.
+
+## The call stack
+
+Now for where everything lives while a function runs. Each call needs room for its parameters, its local variables, and the spot to return to. That room has to appear when the call starts and disappear when it ends, and calls nest: a function can call another function before it finishes. The structure that fits is a stack, like a stack of plates where you only touch the top one.
+
+Each call gets a <Term id="stack-frame">stack frame</Term>, a block of memory holding that call's parameters, its locals, and its return location. The frames sit in the part of RAM called the <Term id="call-stack">call stack</Term>. A call pushes a new frame on top. A return pops the top frame off. Only the top frame is running.
+
+<Scene name="cpp-foundations/call-stack">
+Play it once, then scrub through it. Pick a moment and say which frames exist, which one is running, and where its return will go. The 65 at the end passed through two returns.
+</Scene>
+
+Several things you already know fall out of this picture.
+
+A local variable vanishes at the end of its function because its frame is popped. That's <T id="scope">scope</T> in physical form. The memory is not erased. It's marked free, and the next call to push a frame lands on the same bytes. That is the usual source of the junk in an <T id="uninitialized-variable">uninitialized variable</T>: leftover values from some earlier call's frame.
+
+Each call to a function gets its own parameters and locals, so the same function can be running twice at once without the two interfering. That is what makes recursion possible, coming up next.
+
+The return location is part of the frame. On the V5 Brain's ARM chip, a call puts the return address in a register called the link register, and a function that calls others saves it in its frame first. You can see this in the assembly the compiler produces for a tiny function: it begins with `push {fp, lr}`. Paste a function into [Compiler Explorer](https://godbolt.org/), choose an ARM compiler, and read the output. The stack itself is what [stack memory](../pointers-and-references/#stack-and-heap) means on the next page, in contrast with the heap.
+
+Everything here describes what the language promises, not always what the machine does. With optimization on, the compiler often inlines a small function: it pastes the body into the caller and skips the call, so no frame is created. Compile the `add` function from the animation for ARM with `-O2`, and no call to it is left in the output. The behavior of your program doesn't change, but a debugger may not show a frame you expected. When you pause a program in a debugger, its list of active frames is the call stack, and the learncpp article on [the debugger's call stack](https://www.learncpp.com/cpp-tutorial/using-an-integrated-debugger-the-call-stack/) shows how to read one.
+
+## Stack overflow and recursion
+
+Nothing says a function can't call itself. A function that does is <Term id="recursion">recursive</Term>, and it suits problems that contain a smaller copy of themselves. The sum of 1 to n is n plus the sum of 1 to n - 1:
+
+```cpp
+int sumTo(int n) {
+    if(n == 0) {
+        return 0;
+    }
+
+    return n + sumTo(n - 1);
+}
+```
+
+`sumTo(4)` becomes 4 + `sumTo(3)`, which waits for 3 + `sumTo(2)`, and so on down to `sumTo(0)`, which finally returns without calling anything. The answer then builds back up through the returns: 0, 1, 3, 6, 10. That `if` is the **base case**, the input answered directly. Without it, nothing ever stops the calls.
+
+Each of those waiting calls has its own frame. The stack is finite, so a recursion that goes too deep, or never stops, runs out of room. That's a <Term id="stack-overflow">stack overflow</Term>. Here is what the stack costs on the Brain. A PROS task gets a stack of `TASK_STACK_DEPTH_DEFAULT` words by default, set in `rtos.h` to 0x2000. A word is 4 bytes, so that's 8192 words, which is 32 KB. Compiled for ARM without optimization, `sumTo` has a 16-byte frame, so the limit comes around 2000 calls deep. A function with a bigger local array would run out much sooner.
+
+<Scene name="cpp-foundations/recursion-depth">
+Set the frame size to 64 bytes and slide the depth until the bar turns red. Then drop the frame size to 16 and find the new limit. Large locals shrink the room for calls.
+</Scene>
+
+The same bug on a laptop is gentler only because the stack is bigger: Linux defaults to 8 MB. A function with no base case on a laptop dies with a <T id="segmentation-fault">segmentation fault</T>. The PROS headers don't say what the Brain does when a task overflows its stack, and this guide hasn't tested it. Treat it as a crash.
+
+A loop can do anything recursion can, with no frames piling up, and on a robot a loop is nearly always the better choice. Recursion earns its place on problems that naturally split into smaller copies of themselves, like walking through nested data. The optimizer can also turn some recursion into a loop on its own, so a bug that overflows at `-O0` may quietly work at `-O2`. Don't rely on that. The learncpp article on [recursion](https://www.learncpp.com/cpp-tutorial/recursion/) works through more examples.
+
+<ReadTheDocs>
+Open cppreference's page on [default arguments](https://en.cppreference.com/cpp/language/default_arguments) and find which parameters of a function are allowed to have default values. The PROS motor constructor uses this: you'll see parameters in its documentation written with `=` after the name.
+</ReadTheDocs>
+
+You can now name a piece of work and reuse it, but `addPoints` is still broken. The next page, [Pointers and References](../pointers-and-references/), gives a function a way to reach the caller's own variable.
+
+<Check prompt="In clamp(speed * 2, 0, 100), name the arguments and the parameters.">
+The arguments are `speed * 2`, `0` and `100`, the values the caller supplies. The parameters are `value`, `low` and `high`, the names in the function's definition. `speed * 2` is worked out first, and the result is copied into `value`.
+</Check>
+
+<Check prompt="What do a and b hold after this code runs?">
+`a` is 4 and `b` is 8. `n` is a copy of `a`, so doubling `n` inside the function leaves `a` alone, and the function hands back 8.
+
+```cpp
+int doubleIt(int n) {
+    n = n * 2;
+    return n;
+}
+
+int a = 4;
+int b = doubleIt(a);
+```
+</Check>
+
+<Check prompt="Write a function isLow that takes int batteryPercent and says whether it is below 20.">
+```cpp
+bool isLow(int batteryPercent) {
+    return batteryPercent < 20;
+}
+```
+A comparison already produces a `bool`, so it can be returned directly. No `if` is needed.
+</Check>
+
+<Check prompt="A function declares int total = 0;, adds to it, and returns. When it's called a second time, does total start at 0 or at the old value?">
+At 0. The first call's frame was popped when it returned, and `total` went with it. The second call pushes a new frame and runs the declaration again.
+</Check>
+
+<Check prompt="What goes wrong if you call sumTo(-1)?">
+The base case tests for exactly 0, and the calls go to -2, -3, and so on away from it. Nothing ever stops them, so the frames pile up until the stack overflows. A safer test is `n <= 0`.
+</Check>
