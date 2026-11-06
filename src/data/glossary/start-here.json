@@ -18,5 +18,21 @@
   { "id": "clock-speed", "term": "clock speed", "definition": "How many timing pulses a CPU's clock produces per second, measured in hertz. Each step of the CPU's work takes place on these pulses.", "page": "start-here/inside-a-computer" },
   { "id": "cache", "term": "cache", "definition": "A small, fast memory inside the CPU that keeps copies of recently used data, so most reads don't have to wait for RAM.", "page": "start-here/inside-a-computer" },
   { "id": "non-volatile-memory", "term": "non-volatile memory", "definition": "Storage that keeps its contents without power, such as flash memory or an SD card.", "page": "start-here/inside-a-computer" },
-  { "id": "flash-memory", "term": "flash memory", "definition": "A kind of non-volatile storage with no moving parts. It's where the V5 Brain keeps uploaded programs.", "page": "start-here/inside-a-computer" }
+  { "id": "flash-memory", "term": "flash memory", "definition": "A kind of non-volatile storage with no moving parts. It's where the V5 Brain keeps uploaded programs.", "page": "start-here/inside-a-computer" },
+  {"id": "source-code", "term": "source code", "definition": "The text of a program as a person writes it, kept in files. A CPU can't run it until a compiler translates it.", "page": "start-here/what-code-does"},
+  {"id": "compiler", "term": "compiler", "definition": "A program that translates source code into machine code for one kind of CPU.", "page": "start-here/what-code-does"},
+  {"id": "compile", "term": "compile", "definition": "To run a compiler on source code and produce machine code.", "page": "start-here/what-code-does"},
+  {"id": "assembly-language", "term": "assembly language", "definition": "A readable text form of machine code where each line is one instruction, with names instead of numbers. Each kind of CPU has its own.", "page": "start-here/what-code-does"},
+  {"id": "high-level-language", "term": "high-level language", "definition": "A programming language that describes what you want in terms closer to ideas, leaving a compiler to work out the individual instructions. C++ is one.", "page": "start-here/what-code-does"},
+  {"id": "statement", "term": "statement", "definition": "One complete command in a program. In C++ it ends with a semicolon, and statements run one after another from top to bottom.", "page": "start-here/what-code-does"},
+  {"id": "library", "term": "library", "definition": "A collection of ready-made code you can use in your own program, such as PROS.", "page": "start-here/what-code-does"},
+  {"id": "toolchain", "term": "toolchain", "definition": "The set of tools that turn source code into a program: compiler, assembler, linker and helpers.", "page": "start-here/what-code-does"},
+  {"id": "build", "term": "build", "definition": "Running the whole toolchain on a project to produce its binary file.", "page": "start-here/what-code-does"},
+  {"id": "binary-file", "term": "binary file", "definition": "A file holding a finished program as machine code and data, ready to upload to the robot.", "page": "start-here/what-code-does"},
+  {"id": "optimization", "term": "optimization", "definition": "The compiler rewriting a program into machine code that does the same job faster or smaller.", "page": "start-here/what-code-does"},
+  {"id": "interpreter", "term": "interpreter", "definition": "A program that reads your code and carries it out while it runs, instead of translating it all beforehand.", "page": "start-here/what-code-does"},
+  {"id": "syntax", "term": "syntax", "definition": "The grammar of a programming language: the exact rules for how code must be written.", "page": "start-here/what-code-does"},
+  {"id": "compile-error", "term": "compile error", "definition": "A message from the compiler saying your code breaks the language's rules, so it can't produce a program.", "page": "start-here/what-code-does"},
+  {"id": "bug", "term": "bug", "definition": "A mistake in a program that compiles fine but makes it do the wrong thing.", "page": "start-here/what-code-does"},
+  {"id": "debugging", "term": "debugging", "definition": "Finding and fixing bugs.", "page": "start-here/what-code-does"}
 ]
