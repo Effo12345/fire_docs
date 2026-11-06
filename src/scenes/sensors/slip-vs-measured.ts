@@ -44,8 +44,9 @@ export default defineScene({
         const now = draw.line(0, 200, 0, 340, { color: color.focus, width: 1.5 });
         const gap = draw.line(0, 0, 0, 0, { color: color.error, width: 2 });
 
-        draw.text('encoder distance', RIGHT, 218, { color: color.error, size: 13, anchor: 'end' });
-        draw.text('true position', RIGHT, 236, { color: color.value, size: 13, anchor: 'end' });
+        draw.text('encoder distance', axes.sx(0) + 12, 214, { color: color.error, size: 13 });
+        draw.text('true position', axes.sx(0) + 12, 232, { color: color.value, size: 13 });
+        draw.line(axes.sx(CUT_TIME), 198, axes.sx(CUT_TIME), 340, { color: color.rule, width: 1, dash: '3 3' });
         draw.text('motors cut', axes.sx(CUT_TIME), 192, { color: color.dim, size: 13, anchor: 'middle' });
         const readout = draw.text('', LEFT, 22, { size: 14 });
 

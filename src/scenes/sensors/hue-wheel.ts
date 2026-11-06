@@ -2,7 +2,7 @@ import { defineScene } from '@kit/scene';
 import { color } from '@kit/palette';
 import { inBand, naiveCheck, orCheck } from './lib/hue';
 
-const CX = 100;
+const CX = 110;
 const CY = 108;
 const R = 62;
 const BAND_R = 78;
