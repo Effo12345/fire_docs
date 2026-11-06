@@ -1,19 +1,254 @@
 ---
 title: Arrays and Loops
-description: Keeping many values in one place, and running the same code over and over.
+description: Keeping many values under one name, and making a program run the same code over and over.
 ---
 import Scene from '../../../components/Scene.astro';
 import Check from '../../../components/Check.astro';
+import ReadTheDocs from '../../../components/ReadTheDocs.astro';
+import Term from '../../../components/Term.astro';
 import T from '../../../components/T.astro';
 
-This page is being written. Its loop animation is finished, and shows how to read a loop one line at a time.
+The last page averaged three motor speeds: 50, 80 and 100. That worked because there were three, and each one could have its own variable. With `speed1`, `speed2` and `speed3`, the total is `speed1 + speed2 + speed3`. With thirty readings, the same approach means thirty names and a line that runs off the screen. A robot's data comes in long lists: a sensor sampled every 10 ms, the points of a path, the states of the buttons on a controller.
+
+Two tools fix this. One keeps a whole list under a single name. The other runs a piece of code again and again, so you write the adding once instead of thirty times. The examples run as written in the setup from [Trying code without a robot](../variables-types-scope/#trying-code-without-a-robot).
+
+## An array is boxes side by side
+
+An <Term id="array">array</Term> is a fixed number of values of the same type, stored one after another in memory under one name. It is the named bucket from [Variables, Types, and Scope](../variables-types-scope/), repeated: the type, then the name, then in square brackets how many.
+
+```cpp
+int speeds[3] = {50, 80, 100};
+```
+
+That claims three `int` boxes in a row, 12 bytes, and fills them with the values in braces. Each box is an <Term id="element">element</Term>. To use one, you give its <Term id="index">index</Term>, the number in square brackets that says which element you mean:
+
+```cpp
+int speeds[3] = {50, 80, 100};
+
+std::cout << speeds[1] << "\n";    // 80
+speeds[1] = 85;                    // overwrites the 80
+```
+
+The first element is `speeds[0]`, not `speeds[1]`, so with three elements the valid indexes are 0, 1 and 2. This is called being <Term id="zero-indexed">zero-indexed</Term>, and it trips up almost everyone for a week. The next section shows why it was designed that way, and the reason is not a quirk.
+
+If you list fewer values than the array holds, the rest become zero, and an empty `{}` makes every element zero:
+
+```cpp
+int readings[5] = {1, 2};    // 1, 2, 0, 0, 0
+int cleared[5] = {};         // all zeros
+```
+
+Leave out the braces entirely and you get the problem from the last page: the elements are <T id="uninitialized-variable">uninitialized</T>, holding whatever the bytes held before. The size has to be known when the program is compiled, so `5` or a `const` works, but a size read from a variable that changes does not. For that, the language has other containers, covered in [Vector](../../bigger-programs/vector/). The learncpp article on [C-style arrays](https://www.learncpp.com/cpp-tutorial/introduction-to-c-style-arrays/) goes through the declaration rules.
+
+## How the CPU finds an element
+
+Remember from [Inside a Computer](../../start-here/inside-a-computer/) that memory is a long row of numbered bytes, and a variable is a name for the first <T id="address">address</T> of its bytes. An array is one name for the first address of a longer block. Every element is the same size, so the <T id="cpu">CPU</T> can work out where any element lives with one multiplication and one addition:
+
+$$\text{address of } a[i] = \text{start of } a + i \times \text{size of one element}$$
+
+For `speeds`, each `int` is 4 bytes (the <T id="sizeof">sizeof</T> operator from the last page tells you). If the array starts at address 100, then `speeds[2]` is at 100 + 2 x 4 = 108. Move the slider and read the formula. The addresses in the picture are small made-up numbers; real ones are large, but the arithmetic is the same.
+
+<Scene name="cpp-foundations/array-memory">
+Slide the index from 0 to 2 and watch the address step by 4 each time. Then go to 3 and to -1, and compare the highlight color and the sentence under the picture.
+</Scene>
+
+Now the zero makes sense. The index isn't a position counted from one, it is an offset: how many elements to move from the start. The first element is zero elements away. Starting at 1 would mean subtracting 1 in that formula on every single access, and the machine would do that extra work every time. The convention is older than C++, and it stuck because the math is cleaner.
+
+## Past the end of an array
+
+Slide the index to 3. There is no `speeds[3]`, but the formula doesn't know that. It works out address 112, and the CPU reads whatever bytes are there. Using an index outside the array like this is <Term id="out-of-bounds">out of bounds</Term>.
+
+C++ does not check. An array doesn't remember how long it is, and the compiled code for `speeds[i]` is only the multiply, the add and the read. In the picture, `total` happens to sit in the next four bytes, so `speeds[3]` reads 230. That layout is the compiler's choice, and nothing promises it. Reading out of bounds gives some other variable's value, or leftover bytes, or an address the program isn't allowed to touch.
+
+Writing is worse. Storing into `speeds[3]` changes whatever lives at that address, and it does so silently. That is a <Term id="buffer-overflow">buffer overflow</Term>: writing past the end of an array, damaging a neighbor. The damaged neighbor might be another variable, which gives bugs that show up far from their cause. It might be bookkeeping the program relies on, such as where a function should return to, which is how many security holes in real software work. The language calls all of this *undefined behavior*, so the program is allowed to do anything, including appearing to work today. Compilers can sometimes see it: with `-Wall -O2`, a loop that visits `speeds[3]` makes g++ warn that an iteration "invokes undefined behavior", and a warning is the cheapest bug report you will ever get.
+
+Because the array forgets its length, you keep track of it yourself. The usual way is a constant:
+
+```cpp
+const int COUNT = 3;
+int speeds[COUNT] = {50, 80, 100};
+```
+
+Now `COUNT` is the one place that says how many there are. If you must ask the array, `sizeof(speeds) / sizeof(speeds[0])` is the total bytes divided by the bytes in one element, which is 12 / 4 = 3, and since C++17, `std::size(speeds)` from `<iterator>` does the same. Both stop working when an array is handed to a function, because the function receives only the start address. [Pointers and References](../pointers-and-references/#arrays-and-pointers) explains why. The safer containers `std::array` and `std::vector` know their own length; they arrive in [Vector](../../bigger-programs/vector/).
+
+## Doing it again: while
+
+You can write out three additions by hand. You can't write out "keep going until it's small enough" when you don't know how many times that is. Say a value must be halved until it is 10 or less. Starting from 100, that takes four halvings. Starting from 5000, it takes nine. The code must be the same for both.
+
+A <Term id="loop">loop</Term> is code that repeats while a condition stays true. The simplest is `while`: test the condition, and if it's true, run the body, then test again.
+
+```cpp
+int value = 100;
+int count = 0;
+
+while(value > 10) {
+    value = value / 2;
+    count++;
+}
+```
+
+The test inside the parentheses is the <Term id="loop-condition">loop condition</Term>. Each run through the braces is one <Term id="iteration">iteration</Term>. Here the body runs four times and `count` ends at 4. Step through it and notice that the final test, the one that fails, is what ends the loop; the body doesn't announce it.
+
+<Scene name="cpp-foundations/while-trace">
+Watch line 4 come back around between every pass. When <code>value</code> is 25, predict whether the next halving makes it 12 or 13 before you step, then check the note.
+</Scene>
+
+This is the same jump the <T id="program-counter">program counter</T> makes in [Inside a Computer](../../start-here/inside-a-computer/): a conditional jump forward to skip the body, and a plain jump backward to the test. Nothing new happens inside the machine. The loop condition is the same kind of <T id="condition">condition</T> as in an `if`, but where `if` checks once, `while` checks again after every iteration. That also means the body can run zero times: if `value` starts at 5, the first test fails and the braces are skipped.
+
+The body has to change something the condition looks at, or the test never turns false. A loop that never ends is an <Term id="infinite-loop">infinite loop</Term>. Delete the `value = value / 2;` line above and the program sits there forever, and the same happens with a typo like `value = value * 2`. Sometimes that's on purpose. A robot program is one big loop, `while(true)` with a short delay inside, and a later page builds it. By accident, it freezes your robot, so when a program hangs, check what the condition depends on.
+
+There's also `do { } while(...)`, which runs the body first and tests afterward, so it always runs at least once. It's rare enough that the learncpp page on [do-while](https://www.learncpp.com/cpp-tutorial/do-while-statements/) is the place to look when you need it. The one for [while statements](https://www.learncpp.com/cpp-tutorial/introduction-to-loops-and-while-statements/) covers the rest of the basics.
+
+## The for loop
+
+Most loops follow a pattern. Set up a counter, test it, change it each time. With `while`, those three jobs sit on three different lines, and forgetting the change is how infinite loops happen. The `for` loop puts all three on one line, in order:
+
+```cpp
+const int COUNT = 3;
+int speeds[COUNT] = {50, 80, 100};
+int total = 0;
+
+for(int i = 0; i < COUNT; i++) {
+    total = total + speeds[i];
+}
+```
+
+Inside the parentheses, separated by semicolons: the setup runs once before anything; the condition is tested before every iteration; the update runs after every iteration. It does exactly what this `while` version does:
+
+```cpp
+const int COUNT = 3;
+int speeds[COUNT] = {50, 80, 100};
+int total = 0;
+
+int i = 0;
+while(i < COUNT) {
+    total = total + speeds[i];
+    i++;
+}
+```
+
+The difference is that in the `for` version, `i` belongs to the loop. It exists only inside, by the <T id="scope">scope</T> rules from the first page, so a second loop can reuse the name. Counters conventionally get short names like `i`, and that is one of the few places where a one-letter name is fine, because it's visible for four lines. If it means something specific, give it a real name, as the nested loops below do.
+
+Counting down works too. Start at the last valid index, which is `COUNT - 1`, and stop when it passes zero:
+
+```cpp
+const int COUNT = 3;
+int speeds[COUNT] = {50, 80, 100};
+
+for(int i = COUNT - 1; i >= 0; i--) {
+    std::cout << speeds[i] << "\n";
+}
+```
+
+Be careful here if you make `i` unsigned. An `unsigned` variable can never be below zero, so `i >= 0` is always true, and when `i` is 0 the `i--` wraps it around to 4294967295 instead of -1, exactly like the wheel from [the first page](../variables-types-scope/). The loop never ends, and before long `speeds[i]` is far out of bounds. With `-Wextra`, g++ warns about a "comparison of unsigned expression in `>= 0` is always true". This is one reason to prefer plain `int` for counters, even though a count can't be negative. One more form deserves a mention: `for(int s : speeds)` walks every element without an index, and it is on the learncpp page for [range-based for loops](https://www.learncpp.com/cpp-tutorial/range-based-for-loops-for-each/).
 
 ## Tracing a loop
 
+The best way to understand a loop is to be the computer for a while. The scene shows the sum from above, with `COUNT` written out as 3, one line at a time. Line 4 shows up repeatedly, and each time it does something different: first it sets `i` up, afterward it counts it up and tests it.
+
 <Scene name="cpp-foundations/loop-trace">
-The highlighted line is the one the <T id="cpu">CPU</T> is running. Scrub backward to see any step again.
+Step to the second visit to line 5. The line is identical to the first visit, but <code>speeds[i]</code> now means a different box. Keep going until the test fails.
 </Scene>
 
-<Check prompt="If the array had four elements, what would you need to change in the loop?">
-The condition, to `i < 4`. Otherwise the loop would stop before reaching the last element.
+When the loop ends, `total` is 230. The last page showed that `230 / 3` gives 76, not 76.67, because both sides are integers, and that is still true with the array's own length in place of the 3:
+
+```cpp
+const int COUNT = 3;
+int total = 230;
+
+int average = total / COUNT;                          // 76
+double exact = static_cast<double>(total) / COUNT;    // 76.6667
+```
+
+The first is a speed you can send to a motor, and the second is the more accurate figure for a calculation. Whether truncating is acceptable is a question about your problem, and now you know to ask it. The pattern is worth memorizing: accumulate in a variable that starts at 0, add each element, divide at the end.
+
+## Off by one
+
+Change one character in the condition, from `<` to `<=`, and see what happens:
+
+```cpp
+const int COUNT = 3;
+int speeds[COUNT] = {50, 80, 100};
+int total = 0;
+
+for(int i = 0; i <= COUNT; i++) {
+    total += speeds[i];
+}
+```
+
+An <Term id="off-by-one">off-by-one error</Term> is a loop that runs one time too many or too few, or an index that's one too high or too low. It is the most common bug in loops, and it comes from a simple mismatch. There are three elements, but the last index is 2. The count and the last index differ by one, so it is easy to use the wrong one in the test.
+
+<Scene name="cpp-foundations/off-by-one">
+Follow the loop to its fourth pass. The first three give the right 230. Which line produces the garbage, and does the program stop to tell you?
+</Scene>
+
+The nasty part is how quietly it fails. No error, no crash. `speeds[3]` is read like any other element, and the total is garbage, or it appears fine on your machine and breaks on the robot because different memory sits next to the array. The mistake in the other direction is just as common: `i < COUNT - 1` skips the last element, and a loop starting at `i = 1` skips the first.
+
+Two habits catch these. When you write a loop, check the first iteration and the last one by hand, writing down what `i` is, and whether the body is right with it. And the standard form `for(int i = 0; i < COUNT; i++)` is worth typing exactly, because you can recognize that it's right at a glance. The learncpp article on [arrays and loops](https://www.learncpp.com/cpp-tutorial/arrays-and-loops/) discusses more cases.
+
+## Leaving early: break
+
+Sometimes you don't need to visit everything. If you're looking for the first speed over a limit, once you've found it, the rest is wasted work. `break` ends the loop immediately.
+
+```cpp
+int speeds[4] = {40, 55, 90, 70};
+int found = -1;
+
+for(int i = 0; i < 4; i++) {
+    if(speeds[i] > 80) {
+        found = i;
+        break;
+    }
+}
+```
+
+`found` starts at -1, which can't be an index, so after the loop it means either an index or "none". Step through and watch the last two highlighted lines.
+
+<Scene name="cpp-foundations/break-trace">
+Notice what never runs: the <code>i++</code> after the break, and the whole iteration for <code>speeds[3]</code>. Which index does <code>found</code> end up holding?
+</Scene>
+
+A related tool is `continue`, which skips the rest of the current iteration and jumps to the next one, for cases like "ignore bad readings and keep going". A `break` leaves only the innermost loop it sits in, which matters in the next section. The learncpp page on [break and continue](https://www.learncpp.com/cpp-tutorial/break-and-continue/) compares them with other ways out.
+
+## Loops inside loops
+
+The body of a loop can contain another loop. This is a <Term id="nested-loop">nested loop</Term>, and the inner one runs completely, start to finish, for every single iteration of the outer one. Picture a grid of 3 rows and 4 columns, such as a tiny map of a field divided into squares.
+
+```cpp
+for(int row = 0; row < 3; row++) {
+    for(int col = 0; col < 4; col++) {
+        std::cout << row << "," << col << " ";
+    }
+    std::cout << "\n";
+}
+```
+
+The inner counter `col` goes 0, 1, 2, 3 for row 0, then starts over for row 1, and again for row 2. The body at the center runs 3 x 4 = 12 times. Move the slider one pass at a time and watch which counter changes.
+
+<Scene name="cpp-foundations/nested-grid">
+Step from pass 4 to pass 5. Which counter changed, and what happened to the other one?
+</Scene>
+
+The counts multiply, and that matters for speed. A loop of 100 inside a loop of 100 does 10,000 iterations, and a third loop inside makes it a million. On a robot that has to finish its work every 10 ms, a nested loop over a big list can quietly eat the whole budget. The usual advice is to name the counters for what they count (`row` and `col`) so you can't mix them up, and to reach for nesting only when the problem is two-dimensional.
+
+<ReadTheDocs>
+Open [cppreference's page on `for`](https://en.cppreference.com/cpp/language/for) and find what happens when you leave out the condition between the semicolons. Then look for which of the three parts of the header can be left empty.
+</ReadTheDocs>
+
+Looking back at the sum, the average and the search, each is a small piece of work that is waiting to be reused on a different array. If you need the sum of two arrays, you would copy the loop and rename the variables, and a copy that has a bug in it is a bug twice. The next page gives a piece of code a name, so you can write it once and use it anywhere.
+
+<Check prompt="An array is declared as `int readings[8];`. What are the first and last valid indexes, and what does `readings[8]` do?">
+0 and 7. `readings[8]` is out of bounds: nothing stops it, the program reads or writes whatever memory comes after the array, and the behavior is undefined.
+</Check>
+
+<Check prompt="If `speeds` starts at address 200 and each `int` is 4 bytes, what is the address of `speeds[5]`?">
+200 + 5 x 4 = 220. The index is the number of elements to skip from the start, and each one is 4 bytes wide.
+</Check>
+
+<Check prompt="Write a loop that prints every element of `speeds` except the ones equal to 0. Which statement did you use, and why does it not end the loop?">
+Inside a `for(int i = 0; i < COUNT; i++)`, put `if(speeds[i] == 0) { continue; }` before the `std::cout` line. `continue` ends only the current iteration, so the counter still goes up and the loop moves on to the next element. `break` would stop the whole loop at the first zero.
+</Check>
+
+<Check prompt="This loop is meant to run 5 times, but never stops. What is wrong? `for(unsigned i = 4; i >= 0; i--) { }`">
+An unsigned number can't go below zero. `i >= 0` is always true, and when `i` is 0, `i--` wraps around to 4294967295 instead. Use an `int` counter.
 </Check>
