@@ -1,5 +1,170 @@
 ---
 title: "Connecting Wirelessly"
+description: How the controller, radio and Brain link up, how to upload and read output without a cable to the Brain, how program slots work, and what to check when the link fails.
 ---
+import Scene from '../../../components/Scene.astro';
+import Api from '../../../components/Api.astro';
+import Check from '../../../components/Check.astro';
+import ReadTheDocs from '../../../components/ReadTheDocs.astro';
+import Hl from '../../../components/Hl.astro';
+import Term from '../../../components/Term.astro';
+import T from '../../../components/T.astro';
 
-This page is being written.
+[Inside a PROS Project](../inside-a-pros-project/) ended with a robot that works but is tied to your laptop by a USB cable. That's fine at a desk. It stops being fine when the robot is driving across a room, or when the Brain is buried inside a frame and the port is hard to reach. This page cuts the cable: the Brain, the controller and your laptop all talk to each other through the air, and you can still upload code and read what your program prints.
+
+## What is talking to what
+
+Four things are involved, and it helps to name them before anything goes wrong.
+
+- Your laptop, running VS Code.
+- The V5 controller, the one the driver holds.
+- The V5 Robot Radio, a small module on the robot. It is the robot's <Term id="radio">radio</Term>: a device that sends and receives data through the air instead of along a wire. VEX's name for it is the <Term id="smart-radio">V5 Robot Radio</Term>, and it plugs into one of the Brain's <T id="smart-port">Smart Ports</T> with a smart cable. VEX's pairing article lists it as a required part for a wireless connection.
+- The V5 Brain, which runs your program.
+
+The link between the controller and the robot's radio is VEX's <Term id="vexnet">VEXnet</Term>, the name VEX gives its wireless system. The Brain's Settings menu has a Radio Type setting, in the bottom left corner, with VEXnet and Bluetooth as the options. VEXnet is the normal choice. VEX's [pairing article](https://kb.vex.com/hc/en-us/articles/360035592532) is the authority on the Bluetooth option, and it warns that changing the setting on the Brain changes the controller too. If you ever switch to Bluetooth, switch back before you go to a competition field.
+
+Your laptop never talks to the radio directly. It plugs into the controller, and the controller passes everything along to the Brain over the radio link. That is the whole trick behind wireless upload: the cable moves from the Brain to the controller, and the VS Code buttons stay the same.
+
+## Pairing
+
+A controller and a Brain have to be introduced once, so that each one knows to talk to the other and ignore everyone else's. That introduction is <Term id="pairing">pairing</Term>. The introduction is done over a cable, which is called a <Term id="tether">tether</Term>: a direct smart cable between the controller and the Brain. VEX's pairing article lists the parts as a powered Brain, a controller, a V5 Robot Radio and two smart cables.
+
+1. Plug the radio into a Smart Port on the Brain, and plug a smart cable from the controller into another Smart Port.
+2. Power on the Brain. The controller turns on by itself when it's tethered to a powered Brain.
+3. Look at the Brain's Home screen. A controller icon in the top right corner means the Brain sees the controller through the cable.
+4. Unplug the tether. The icon changes to a wireless controller icon, which means the link now runs through the radio. If the wireless icon never shows up, the two are not paired yet.
+
+The radio has a light, and VEX's [LED article](https://kb.vex.com/hc/en-us/articles/32654624840340-Understanding-the-V5-Radio-LED-Lights) explains what the colors say. Solid red means there is no connection between the Brain and the controller. Flashing red means the link is up, but the controller isn't connected to a field control system or the Brain isn't running a program yet. Flashing green means the link is up, the controller is plugged into field control, and the Brain is running a program. On a bench, with no field and your program running, flashing red is normal. Flashing green only happens on a field.
+
+Pairing is remembered. You do it again only when you swap a controller or a Brain, or when the link has been broken some other way.
+
+## Uploading through the controller
+
+You already use **Build & Upload** from [Installing PROS](../installing-pros/#build-and-upload). To use it wirelessly, plug the USB cable into the controller instead of the Brain, with the robot powered and linked. VEX's wireless download articles describe the same setup: the USB cable runs from the computer to the controller, and the controller must stay plugged in for the whole transfer. The extension finds the port itself, and asks you to choose if more than one device is plugged in.
+
+You will notice the difference: it's slow. Sending a file across a radio is slower than sending it down a cable, and a PROS program is bigger than you might think, because it contains the kernel as well as your code. The PROS docs say plain wireless uploads are "typically unacceptably slow", and they describe the fix on their [wireless upload page](https://pros.cs.purdue.edu/v5/tutorials/topical/wireless-upload.html).
+
+### Hot and cold
+
+Most of what you upload never changes. The kernel is the same every time, and only the code you edited is different. So PROS splits the build in two. The **cold image** holds the kernel and other rarely changed code. The **hot image** holds the parts you edit, such as `opcontrol`, `autonomous` and `initialize`. The CLI compares the cold part against what's already on the Brain, using filenames and checksums, and skips it when they match. After the first upload, you send only the hot part.
+
+<Scene name="first-robot-program/link-paths">
+Press play and watch all three rows. The squares are pieces of one program, and the <Hl c="focus">yellow</Hl> ones are your own code. Compare which row finishes first, then which pieces row 3 never has to send.
+</Scene>
+
+The scene's speeds are made up to show proportions. Real transfer times depend on your program and your radio link, so time your own upload if you want numbers.
+
+The switch is one line in your project's `Makefile`. Open it and find:
+
+```make
+# Set to 1 to enable hot/cold linking
+USE_PACKAGE:=1
+```
+
+This is how the template for 4.2.3 ships, taken from its [template-Makefile](https://github.com/purduesigbots/pros/blob/4.2.3/template-Makefile), and the PROS docs also say the feature is on by default. Your own Makefile is the final word. In `common.mk`, the PROS build file you never edit, `USE_PACKAGE` being 1 makes the hot image the default result of a build, so this applies to wired uploads as well.
+
+There is a catch, and it can cost you a program. The PROS docs warn that hot and cold linking can cause data loss across projects: if you upload a project with a different cold package, programs already on the Brain that were built with a mismatched kernel version are deleted. Their advice is to upgrade the other projects to the same kernel version or to set `USE_PACKAGE:=0` in them. A team with several projects built from different PROS versions should know this before putting a working competition program on the same Brain as an experiment.
+
+<ReadTheDocs>
+Open the [PROS wireless upload page](https://pros.cs.purdue.edu/v5/tutorials/topical/wireless-upload.html) and find what a grey screen after a wireless upload means and what the docs tell you to do about it.
+</ReadTheDocs>
+
+## Program slots
+
+The Brain doesn't hold one program. It holds eight, in numbered places called <Term id="program-slot">program slots</Term>, each with its own name. The CLI's [upload command](https://github.com/purduesigbots/pros-cli/blob/master/pros/cli/upload.py) accepts a slot from 1 to 8, and the name of the program defaults to the project's name.
+
+If you give no slot, the upload goes to slot 1 and replaces whatever was in it (unless the project has saved a slot of its own). The sidebar button gives none: in the extension's [upload code](https://github.com/purduesigbots/pros-vsc/blob/develop/src/commands/upload-command.ts) it runs `pros upload` with no slot option. So every project you upload with the buttons lands in slot 1 and overwrites the last one.
+
+To use another slot, open **Integrated Terminal** from the PROS sidebar's Quick Actions and type the command yourself, from inside the project:
+
+```
+pros upload --slot 3
+```
+
+The same command accepts `--name` for a different name on the Brain. After an upload, the CLI shows the program's run screen on the Brain, and doesn't start it. You pick a slot on the Brain and run it from there. The Brain screen is where you choose which slot to run, and you can keep a practice program, a competition program and a test program in three slots, each ready to run without uploading again.
+
+## Watching your program's output in the terminal
+
+The Brain's screen shows eight short lines and you have to be looking at it. Wireless debugging needs something better, and there is already a path for it: the same link that carries uploads can carry text back to your laptop. A window on your computer that shows what your running program prints is a <Term id="serial-terminal">terminal</Term>, here a serial one, because the text travels as a stream of characters over the link.
+
+You print to it with the tool you already know. [C++ Foundations](../../cpp-foundations/variables-types-scope/#trying-code-without-a-robot) printed with `std::cout`, and in a PROS project that goes to the terminal. `api.h`, which `main.h` includes, already pulls in `<iostream>`, so no extra `#include` is needed. Here is a loop that reports the intake's speed twice a second:
+
+```cpp
+void opcontrol() {
+    int tick = 0;
+
+    while(true) {
+        if(tick % 50 == 0) {
+            std::cout << "intake rpm: " << intake.get_actual_velocity() << "\n";
+        }
+
+        tick++;
+        pros::delay(10);
+    }
+}
+```
+
+The loop runs every 10 milliseconds, so every 50th pass is half a second. Printing on every pass would send 100 lines a second, which is far more than anyone can read, and the Brain keeps its outgoing text in a small buffer (2047 bytes in the kernel's [serial driver](https://github.com/purduesigbots/pros/blob/4.2.3/src/system/dev/ser_driver.c)).
+
+The second way to print is `printf`, from C. You'll see it all over PROS code and examples, and it matters to you for a specific reason: it uses the same **format codes** as `pros::lcd::print`, the ones from [Printing a value to the Brain screen](../inside-a-pros-project/#printing-a-value-to-the-brain-screen). `%d` is a whole number, `%.2f` a double with two decimals, and `\n` ends the line.
+
+```cpp
+printf("intake rpm: %.0f\n", intake.get_actual_velocity());
+printf("controller linked: %d\n", master.is_connected());
+```
+
+The same line works on both the screen and the terminal if you only change the function name and drop the line number. The same warning applies too: the code has to match the value's type, or the output is nonsense. <Api sym="misc/is_connected" /> returns whether the controller is linked, which makes a handy first print when you're chasing a connection problem.
+
+Both forms go to the terminal. `pros::lcd::print` goes to the Brain's screen. Each has a job: the screen is for a glance while driving, and the terminal is for a history you can scroll.
+
+### Opening it
+
+In the PROS sidebar, under V5 Brain, click **Brain Terminal**. In the extension's [source](https://github.com/purduesigbots/pros-vsc/blob/develop/src/extension.ts), that button types `pros terminal` into a terminal inside VS Code. You can also type that yourself. In the CLI's [terminal command](https://github.com/purduesigbots/pros-cli/blob/master/pros/cli/terminal.py), a port that turns out to be a controller is opened as a wireless one, so the terminal works with your laptop plugged into the controller. Then upload and run a program that prints, and the lines appear.
+
+### What it can't do
+
+The terminal has limits worth knowing before you trust it.
+
+- **It only shows what is being printed now.** If the program isn't running, or the robot is disabled and `opcontrol` is stopped, no lines arrive.
+- **Lines need their ending.** Each `printf` above ends in `\n`, and so does the `std::cout` one. The kernel's serial driver reports itself as a terminal-type device, so C's standard library holds output until a newline arrives. If a print doesn't show, check for the newline first.
+- **Only one program can use the port.** The CLI's help describes a mode where several PROS programs share the device, but says that mode isn't implemented yet, so treat the Brain as having one listener at a time. Close the terminal before you upload, and open it again afterward.
+- **It slows with volume.** The output buffer is small. Print what you need, and not on every loop pass.
+
+<ReadTheDocs>
+Open the [Controller API](https://purduesigbots.github.io/pros-doxygen-docs/classpros_1_1Controller.html) and find the method that prints text on the controller's own screen. Why might a driver prefer that to the Brain screen or the terminal?
+</ReadTheDocs>
+
+## How this differs from a field
+
+A competition field plugs into the system differently. VEX's [field article](https://kb.vex.com/hc/en-us/articles/360036168431-Connecting-to-the-V5-Competition-Field) says the field control cable goes into the controller that has the radio link to the robot, and a field symbol then appears on the controller's status bar. It also warns against the controller's older, middle field port, which can damage it. The controller is then passing the field's orders to the robot: disabled, autonomous, driver control. That's the <T id="field-control">field control</T> the [match timeline](../inside-a-pros-project/#when-each-function-runs) was about, and it's why a pause icon means the field has the system disabled.
+
+Two practical results follow. The field cable plugs into the controller, so the controller is busy being the field's link while you're queued, and the time to upload is before you go there. And a robot that behaves differently on the field than at your desk is usually showing you the difference between `initialize` followed by `opcontrol` (no field) and the full competition sequence. If your program does something at the desk and nothing on the field, start by asking which function should be running.
+
+<T id="latency">Latency</T> is the last difference, and the hardest to see. It's the delay between something being sent and it arriving. A stick moved on the controller has to cross the radio before the Brain reads it, and the answer to your code reaches the motor after that. The delay is small and depends on distance and interference, so time it yourself if it matters. Every control you build on a stick inherits it, and it's one more reason a wireless robot never reacts in zero time. If something feels late, remember that the radio is in the path and the cable isn't.
+
+## When it won't connect
+
+Check these in order. The first few take seconds and fix most problems.
+
+- **The radio light is solid red, and no controller icon shows on the Brain.** There is no link, according to VEX's LED article. Tether the controller to the Brain with a smart cable and wait for the icons. Then unplug the tether. Make sure the radio itself is plugged into a Smart Port with a smart cable that's seated at both ends. If tethering never makes the icons appear, re-read the [pairing article](https://kb.vex.com/hc/en-us/articles/360035592532) and check the Brain's Radio Type setting.
+- **The icons are there, but the upload can't find a Brain.** The laptop has to be plugged into the controller, with the robot on and linked. If more than one device is plugged in, the extension asks which port to use, so pick the controller's.
+- **The upload hangs or is very slow.** The first wireless upload sends the cold image, so give it time. Keep the USB cable plugged into the controller until it ends, because the transfer stops if the cable comes out. After that first upload, a slow one means hot and cold linking isn't working, so check `USE_PACKAGE` in the Makefile.
+- **"Could not open port."** Another program holds the port. The terminal you left open counts, and so does VEX's V5 Utility, as [Installing PROS](../installing-pros/#when-it-doesnt-work) covered. Close both and upload again.
+- **An older program vanished after an upload.** Look at the cold package warning above. The upload came from a project built with a different kernel version.
+- **The Brain screen is black or grey after a wireless upload.** The PROS docs say black means PROS didn't boot, with a global constructor stuck in a loop as one possible cause, and grey means it booted without running the hot image. Their fix for grey is to delete all user programs, do a clean build, and upload again.
+- **The terminal is silent.** Is the program running? Is the robot enabled? Does the print end in `\n`? Did you use `pros::lcd::print`, which draws on the Brain and not the terminal?
+- **It drops out when the robot moves.** Look at where the radio is. VEX's best practices say not to wrap the radio in foil, not to mount it in a steel box, to keep the thinner part of the radio away from other metal, and that a higher mount is better. A radio buried in the middle of a metal frame is a likely cause, and moving it is the first thing to try. A low controller battery is worth ruling out too, so charge it before you chase anything harder.
+
+<Check prompt="You change one line of opcontrol and upload through the controller. The first upload takes minutes, but the second takes seconds. Why, and what would make the next upload slow again?">
+The first upload sent the cold image, the kernel and other rarely changed code. The second sent only the hot image, which holds the code you edited, since the cold part already matched what was on the Brain. Uploading a project with a different cold package, such as one built from a different kernel version, makes the cold part get sent again, and can delete programs on the Brain built with the old one. Setting `USE_PACKAGE:=0` turns the split off, so every upload sends everything.
+</Check>
+
+<Check prompt="You upload three different projects with the Build & Upload button and afterward the Brain has one program in it. What happened, and how do you keep all three?">
+The button runs `pros upload` with no slot, and the default is slot 1, so each upload replaced the last. To keep all three, upload each one with its own slot from the Integrated Terminal, for example `pros upload --slot 2`, giving slots from 1 to 8.
+</Check>
+
+<Check prompt="Your opcontrol prints with pros::lcd::print(0, &quot;heading: %.1f&quot;, heading); and the terminal on your laptop stays blank while the Brain screen shows it. What would you change to see it in the terminal, and what do you have to remember at the end of the string?">
+`pros::lcd::print` only draws on the Brain's screen. Use `printf("heading: %.1f\n", heading);`, or `std::cout << "heading: " << heading << "\n";`. The format code can stay the same, but there's no line number, and the string ends with `\n` so the line is sent.
+</Check>
+
+A robot with no cable on it can finally go somewhere, so it needs something to steer it. [Driver Control](../driver-control/) turns the controller's sticks into wheel speeds.
