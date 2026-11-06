@@ -15,14 +15,14 @@ const PLANS: Record<number, Partial<Record<Name, Seg[]>>> = {
     1: {
         initialize: [[0, 2]],
         competition_initialize: [[2, 6]],
-        disabled: [[10, 12], [20, 23]],
+        disabled: [[10, 12], [20, 24]],
         autonomous: [[6, 10]],
         opcontrol: [[12, 20]],
     },
     2: {
         initialize: [[0, 2]],
         competition_initialize: [[2, 6]],
-        disabled: [[10, 12], [15, 17], [20, 23]],
+        disabled: [[10, 12], [15, 17], [20, 24]],
         autonomous: [[6, 10]],
         opcontrol: [[12, 15], [17, 20]],
     },

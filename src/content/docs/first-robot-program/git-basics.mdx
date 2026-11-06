@@ -171,7 +171,7 @@ The panel's answer is to check out the old commit.
 
 To keep working from the old version, make a branch before you commit: run **Git: Create Branch...** from the Command Palette and name it, for example `back-to-qualifier-code`. If you only wanted to look, click the branch name in the Status Bar and pick `main`, and your files return to where `main` was.
 
-If you committed while detached and switched away, the commits aren't deleted yet. Git prints a warning naming the lost commit. The terminal command `git reflog` lists recent commits with their ids, and checking one out and running **Git: Create Branch...** saves it. Do that soon, because Git eventually cleans up commits nothing points to.
+If you committed while detached and switched away, the commits aren't deleted yet. The terminal command `git reflog` lists recent commits with their ids. Go back to the one you want with `git switch --detach <commit-hash>`, then run **Git: Create Branch...** to save it. Do that soon, because Git eventually cleans up commits nothing points to.
 
 Nothing in these steps deletes `main` or any commit.
 

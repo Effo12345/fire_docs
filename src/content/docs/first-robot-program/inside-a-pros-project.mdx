@@ -61,7 +61,7 @@ Who decides when each period starts? At a competition, the <Term id="field-contr
 
 On a bench with neither, there is nobody to say "autonomous". The template's own comments cover this: with no competition control connected, `opcontrol` starts right after `initialize` finishes. That's setup 0, and it's how you'll work for most of this guide. The comments also say you can call `autonomous()` yourself from `opcontrol` to test it, which [Your First Autonomous](../first-autonomous/) does with a button.
 
-Two details cause mysterious bugs if you miss them.
+Three details cause mysterious bugs if you miss them.
 
 **Disabled stops your code.** The template says each of these functions is started in its own task, a separate stream of running code (see [Doing Two Things at Once](../../seeing-inside/tasks/) for what that means), and a task can be stopped at any moment. When the robot is disabled or loses its connection, the template says `autonomous` and `opcontrol` are stopped, wherever they were. Enable the robot again and they start over from the first line, which is what setup 2 shows. Anything you declared inside the function is a <T id="local-variable">local variable</T> and begins again from its starting value. Anything you declared outside, a <T id="global-variable">global variable</T>, keeps what it had.
 
@@ -322,7 +322,7 @@ The robot no longer depends on the template, but it still depends on a cable. Th
 `initialize` runs first. When it returns, `opcontrol` starts right away. `autonomous`, `disabled` and `competition_initialize` never run, because nothing is telling the robot about a field.
 </Check>
 
-<Check prompt="You push both sticks forward and the robot drives in a circle, turning to the right. Which line do you change?">
+<Check prompt="You tell both sides to drive forward and the robot spins in place, turning to the right. Which line do you change?">
 Turning right means the left side is pushing forward and the right side is pushing backward. So the right drive's ports have the wrong sign: change `{4, 5, 6}` to `{-4, -5, -6}`. Fix it in the port list once, not at every call.
 </Check>
 

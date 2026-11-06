@@ -10,7 +10,7 @@ import Hl from '../../../components/Hl.astro';
 import Term from '../../../components/Term.astro';
 import T from '../../../components/T.astro';
 
-[Driver Control](../driver-control/) ended with a driver who fixes every mistake by eye. The first 15 seconds of a match take the driver away, and the robot has to carry out a plan alone. That plan is the <Term id="autonomous-routine">autonomous routine</Term>: a sequence of actions the program runs from start to finish with nobody holding a controller. It lives in the `autonomous` function you met in [Inside a PROS Project](../inside-a-pros-project/#main-cpp-and-the-functions-you-never-call), which is still empty.
+[Driver Control](../driver-control/) ended with a driver who fixes every mistake by eye. The first 15 seconds of a match take the driver away, and the robot has to carry out a plan alone. That plan is the <Term id="autonomous-routine">autonomous routine</Term>: a sequence of actions the program runs from start to finish with nobody holding a controller. It lives in the `autonomous` function you met in [Inside a PROS Project](../inside-a-pros-project/#maincpp-and-the-functions-you-never-call), which is still empty.
 
 This page fills it in the simplest way there is, and the simplest way works. You'll watch it work, then watch it stop working, and the reason it stops is what the next section of the guide is for.
 
@@ -108,7 +108,7 @@ void opcontrol() {
 
 <Api sym="misc/get_digital_new_press" /> gives one result per press, as [Driver Control](../driver-control/#holding-versus-pressing) explained. With `get_digital`, holding A would restart the routine the moment it ended.
 
-While the routine runs, `opcontrol` is stuck inside that call, so the sticks are ignored for the three seconds or so it takes. Set the robot on its starting spot, press A, and stay clear of it. If the robot heads somewhere it shouldn't, the Stop button in the PROS sidebar's Quick Actions ends the program, so keep the laptop in reach.
+While the routine runs, `opcontrol` is stuck inside that call, so the sticks are ignored for the three seconds or so it takes. Set the robot on its starting spot, press A, and stay clear of it. If the robot heads somewhere it shouldn't, the Stop button in the PROS sidebar's Quick Actions ends the program, as long as the laptop is still connected, so keep it in reach.
 
 Put the robot on exactly the same spot every time you test. The rest of the page is about why that isn't enough.
 
@@ -150,7 +150,7 @@ All three use a timed move for a job where the answer comes from outside the pro
 
 ## Where this leaves the program
 
-`main.cpp` now has an `opcontrol` with a test button, an `autonomous` that drives, turns and drives again, and the two helpers. [Git Basics](../git-basics/) is next, because there is now a program worth saving. The bigger lesson is what the scene showed: the routine has no way to check itself. To fix that, the robot has to measure what it actually did and compare it to what it meant to do. That's what [Why Sensors](../../sensors/why-sensors/) starts.
+`main.cpp` now has an `opcontrol` with a test button, an `autonomous` that drives, turns and drives again, and the two helpers. [Saving Your Work with Git](../git-basics/) is next, because there is now a program worth saving. The bigger lesson is what the scene showed: the routine has no way to check itself. To fix that, the robot has to measure what it actually did and compare it to what it meant to do. That's what [Why Robots Need Sensors](../../sensors/why-sensors/) starts.
 
 <ReadTheDocs>
 Open <Api sym="motors/set_current_limit" /> and read its example. What is the default current limit the comment names, and what does it say the motor does when it reaches the limit?

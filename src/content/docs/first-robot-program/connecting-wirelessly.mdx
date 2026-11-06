@@ -81,7 +81,7 @@ To use another slot, open **Integrated Terminal** from the PROS sidebar's Quick 
 pros upload --slot 3
 ```
 
-The same command accepts `--name` for a different name on the Brain. After an upload, the CLI shows the program's run screen on the Brain, and doesn't start it. You pick a slot on the Brain and run it from there. The Brain screen is where you choose which slot to run, and you can keep a practice program, a competition program and a test program in three slots, each ready to run without uploading again.
+The same command accepts `--name` for a different name on the Brain. You pick a slot on the Brain's screen and run it from there, so you can keep a practice program, a competition program and a test program in three slots, each ready to run without uploading again.
 
 ## Watching your program's output in the terminal
 
@@ -131,16 +131,16 @@ The terminal has limits worth knowing before you trust it.
 - **It slows with volume.** The output buffer is small. Print what you need, and not on every loop pass.
 
 <ReadTheDocs>
-Open the [Controller API](https://purduesigbots.github.io/pros-doxygen-docs/classpros_1_1Controller.html) and find the method that prints text on the controller's own screen. Why might a driver prefer that to the Brain screen or the terminal?
+Open the <Api sym="misc" label="Controller API" /> and find the method that prints text on the controller's own screen. Why might a driver prefer that to the Brain screen or the terminal?
 </ReadTheDocs>
 
 ## How this differs from a field
 
-A competition field plugs into the system differently. VEX's [field article](https://kb.vex.com/hc/en-us/articles/360036168431-Connecting-to-the-V5-Competition-Field) says the field control cable goes into the controller that has the radio link to the robot, and a field symbol then appears on the controller's status bar. It also warns against the controller's older, middle field port, which can damage it. The controller is then passing the field's orders to the robot: disabled, autonomous, driver control. That's the <T id="field-control">field control</T> the [match timeline](../inside-a-pros-project/#when-each-function-runs) was about, and it's why a pause icon means the field has the system disabled.
+A competition field plugs into the system differently. VEX's [field article](https://kb.vex.com/hc/en-us/articles/360036168431-Connecting-to-the-V5-Competition-Field) says the field control cable goes into the controller that has the radio link to the robot, and a field symbol then appears on the controller's status bar. It also warns against the controller's older, middle field port, which can damage it. The controller is then passing the field's orders to the robot: disabled, autonomous, driver control. That's the <T id="field-control">field control</T> the [match timeline](../inside-a-pros-project/#when-each-function-runs) was about. A pause icon means the field has the system disabled.
 
 Two practical results follow. The field cable plugs into the controller, so the controller is busy being the field's link while you're queued, and the time to upload is before you go there. And a robot that behaves differently on the field than at your desk is usually showing you the difference between `initialize` followed by `opcontrol` (no field) and the full competition sequence. If your program does something at the desk and nothing on the field, start by asking which function should be running.
 
-<T id="latency">Latency</T> is the last difference, and the hardest to see. It's the delay between something being sent and it arriving. A stick moved on the controller has to cross the radio before the Brain reads it, and the answer to your code reaches the motor after that. The delay is small and depends on distance and interference, so time it yourself if it matters. Every control you build on a stick inherits it, and it's one more reason a wireless robot never reacts in zero time. If something feels late, remember that the radio is in the path and the cable isn't.
+<Term id="latency">Latency</Term> is the last difference, and the hardest to see. It's the delay between something being sent and it arriving. A stick moved on the controller has to cross the radio before the Brain reads it, and the answer to your code reaches the motor after that. The delay is small and depends on distance and interference, so time it yourself if it matters. Every control you build on a stick inherits it, and it's one more reason a wireless robot never reacts in zero time. If something feels late, remember that the radio is in the path and the cable isn't.
 
 ## When it won't connect
 
