@@ -1,5 +1,200 @@
 ---
-title: "Variables, Types, and Scope"
+title: Variables, Types, and Scope
+description: How a program remembers things, by naming boxes in memory, choosing what kind of value each one holds, and deciding where each name can be used.
 ---
+import Scene from '../../../components/Scene.astro';
+import Check from '../../../components/Check.astro';
+import ReadTheDocs from '../../../components/ReadTheDocs.astro';
+import Term from '../../../components/Term.astro';
+import T from '../../../components/T.astro';
+import Hl from '../../../components/Hl.astro';
 
-This page is being written.
+A robot program has to remember things. How much battery is left, how fast the intake is spinning, what the score is. A <T id="cpu">CPU</T> can only work on what sits in memory, and memory, as [Inside a Computer](../../start-here/inside-a-computer/) showed, is a long row of numbered bytes. Writing "the byte at address 4,000" in your code would be miserable. You'd have to keep track of which address held what, and you'd have to pick addresses that nothing else was using.
+
+C++ takes that job away from you. You pick a name, the <T id="compiler">compiler</T> picks the address, and from then on the name is all you write. This page is about those names: what they are, what they can hold, how many bytes they cost, and where in a program they exist.
+
+## Trying code without a robot
+
+Everything in this section runs on any computer, no robot needed. The fastest way is an online compiler such as [OnlineGDB](https://www.onlinegdb.com/online_c++_compiler). Paste this in and press Run.
+
+```cpp
+#include <iostream>
+
+int main() {
+    int batteryPercent = 87;
+    std::cout << batteryPercent << "\n";
+
+    return 0;
+}
+```
+
+The first and third lines are scaffolding that later pages explain. For now, know that the program starts at `main`, and every snippet on this page goes between its braces. The line with `std::cout` prints a value to the screen, and `"\n"` ends the line. That's how you'll check what your variables hold. The [why of this setup](../../start-here/what-code-does/#where-youll-run-your-code) is on the page before.
+
+One honest note. That online compiler runs on a 64-bit PC, and the V5 Brain is a 32-bit ARM chip. Nearly everything here is the same on both, and where sizes differ, the page says so. If you want to see the actual machine instructions your code becomes, [Compiler Explorer](https://godbolt.org/) shows them live as you type.
+
+## A variable is a named bucket
+
+Think of a bucket with a name painted on it. You can put something in, look at what's in there, pour it out and put in something else. The bucket stays where it is, and the name stays on it. That's a <Term id="variable">variable</Term>: a named place in memory that holds a value your program can read and change.
+
+The bucket is not a free-for-all, though. A bucket built for water can't hold a handful of marbles neatly, and a bucket that holds marbles is the wrong shape for a single egg. Every variable has a <Term id="type">type</Term>, which says what kind of thing goes in it, how big the bucket is, and how to read what's inside. The type is chosen when the bucket is made and never changes.
+
+## Buckets come in different types
+
+C++ has a handful of built-in types, and four of them cover most of what you'll write.
+
+An <Term id="integer">integer</Term> type holds whole numbers, with no decimal part. The usual one is `int`: a counter, a motor port, a battery percentage. A <Term id="floating-point">floating-point</Term> type holds numbers with a decimal point, and the usual one is `double`: a wheel diameter of 3.25 inches, a distance, a sensor reading. The name comes from how the number is stored, with the decimal point free to "float" to wherever the number needs it. A <Term id="boolean">boolean</Term> holds one of two values, `true` or `false`, and its type is `bool`: is the limit switch pressed, is the intake running. A <Term id="char-type">char</Term> holds a single character such as `'A'`, written in single quotes. Underneath, it stores that character's numeric code, because text is numbers like everything else.
+
+<Scene name="cpp-foundations/bucket-types">
+Watch the four values land in their buckets. Then, near the end, watch what happens when 3.7 goes into the `int` bucket, and decide what you think should have happened.
+</Scene>
+
+The last pour is the important one. A bucket made for whole numbers has no place for a fraction, so the <Hl c="error">.7</Hl> is discarded. C++ does this silently, with no error and no warning by default. The value you get is 3, which is not the nearest whole number (that would be 4). It just drops everything after the decimal point.
+
+Types aren't only about what fits. They also decide what operations make sense. You can add two `int`s but not two `bool`s in any meaningful way, and the compiler uses the type to catch you when you try something nonsensical, before the program ever runs. That check is one of the main reasons C++ asks for types at all.
+
+## Declaring, initializing, assigning
+
+Making a bucket takes one line.
+
+```cpp
+int speed = 50;
+```
+
+The type comes first, then the name, then `=` and a value. This line does two jobs, and C++ has a word for each. A <Term id="declaration">declaration</Term> tells the compiler that a name exists and what type it has, which makes the bucket. <Term id="initialization">Initialization</Term> gives it its first value at the moment it's created. Later, <Term id="assignment">assignment</Term> replaces whatever the variable holds, and it uses the same `=` sign but no type.
+
+```cpp withprev
+speed = 80;
+```
+
+Leaving the type off matters. With `int speed = 80;` a second time, you'd be asking for a second bucket with the same name, which is an error. Without it, you're saying "put 80 in the bucket that already exists."
+
+The `=` sign does not mean "equals", as it does in algebra. It means "work out the right side, then store the result in the left side", and the right side always runs first. That's why `score = score + bonus;` is a perfectly good line, even though it would be nonsense in algebra. Step through it.
+
+<Scene name="cpp-foundations/assign-trace">
+The empty outlines are only where boxes will go, since a variable exists once its line has run. Step to line 4 and notice that nothing new is made, and only the number in `score` changes. Then look at what happens to `saved` when `score` changes on the last line.
+</Scene>
+
+Two things to take from that trace. Assignment destroys the old value, exactly like writing to a byte did on the earlier page. And copying `saved = score` copies the *value* that was in the bucket then. The two buckets are not linked afterward.
+
+C++ has a second way to initialize, with braces.
+
+```cpp nocheck
+int speed{50};
+int wrong{3.7};    // error: would lose the .7
+int quiet = 3.7;   // compiles, holds 3
+```
+
+Brace initialization refuses any conversion that could lose information, which the compiler calls a **narrowing conversion**. The `=` form allows it and truncates silently, as the animation showed. Neither is wrong, and you'll see both in other people's code. This guide mostly uses `=`, since it looks like what you'd write on paper, but braces are a good habit when a silent loss would hurt. See learncpp's article on [narrowing conversions and list initialization](https://www.learncpp.com/cpp-tutorial/narrowing-conversions-list-initialization-and-constexpr-initializers/) for the full rules.
+
+Names are case-sensitive, can't start with a digit, can't contain spaces, and can't be one of C++'s reserved words such as `int` or `while`. This guide writes variables in `camelCase`, like `batteryPercent`, so a multi-word name stays readable.
+
+## Inside the bucket: how many bytes
+
+A bucket is a stretch of bytes, and its type decides how long the stretch is. The size depends on the machine, so C++ gives you an operator to ask: <Term id="sizeof">sizeof</Term> gives the number of bytes a type or variable takes.
+
+```cpp
+std::cout << sizeof(int) << "\n";       // 4
+std::cout << sizeof(double) << "\n";    // 8
+std::cout << sizeof(bool) << "\n";      // 1
+std::cout << sizeof(char) << "\n";      // 1
+```
+
+Those are the values on the V5 Brain, and on a typical PC too. Next, see where buckets actually land in memory.
+
+<Scene name="cpp-foundations/bucket-memory">
+Before anything runs, every byte holds leftover numbers from earlier. Watch which addresses each variable claims, and notice the two bytes nobody uses.
+</Scene>
+
+This is the picture to keep. A variable's name is only a label stuck on its *first* byte. The type tells the compiler how many bytes to read from there, and how to interpret them. The `int` 50 takes four bytes, with the 50 sitting in the first. The `double` takes eight, and what they hold isn't the digits 3.25 at all but an encoded form of the number, which hardware handles for you. The gap between `ready` and `diameter` appears because processors like a value to start at an address that's a multiple of its own size, and the compiler leaves room to make that so. Real compilers place variables in whatever order suits them, so treat the exact layout as an illustration.
+
+### Signed, unsigned, and running out of room
+
+Four bytes give 2³² different patterns, about 4.3 billion. What numbers do those patterns mean? There are two common answers. An <Term id="unsigned">unsigned</Term> type uses every pattern for zero and the positives, so a four-byte one runs from 0 to 4,294,967,295. A <Term id="signed">signed</Term> type sets aside half the patterns for negatives, so the same four bytes cover -2,147,483,648 to 2,147,483,647. A plain `int` is signed. You write `unsigned int` for the other kind. Same bytes, two different readings.
+
+It's easier to see with one byte, which has only 256 patterns. Drag the slider past the ends.
+
+<Scene name="cpp-foundations/number-wheel">
+Set the slider to 127, then 128, then 255, then 256. Find the number where the signed reading flips from positive to negative, and look at what 256 turns into.
+</Scene>
+
+The patterns sit on a circle, because a counter that runs out of room doesn't stop. It wraps around to the start. When a result is too large for its type, you get <Term id="overflow">overflow</Term>, and the stored value is wrong. A robot version: a loop adds 1 to a one-byte counter every 10 ms, and after about 2.5 seconds your timer silently resets to 0.
+
+The honest rules are a little different for the two kinds. For unsigned types, wrapping is defined: go past the top and you land on 0. For a signed `int`, overflow is *undefined behavior*, which means C++ makes no promise at all about what happens. On the Brain, as on most machines, it usually does wrap around exactly like the wheel shows, and you'd see the largest positive number turn into the most negative. But compilers are allowed to assume overflow never happens and optimize on that assumption, so code that relies on the wrap can break in surprising ways. (Squeezing a too-big number into a small signed type like `std::int8_t` is a gentler case. Modern C++ defines it as the wrap on the wheel.) Treat signed overflow as a bug, not a feature.
+
+The sizes of `int` and `long` aren't the same everywhere. On the Brain `long` is 4 bytes, on a 64-bit laptop it's 8. Even `char` differs: it's unsigned on the Brain's ARM chip, so never rely on it holding negative numbers. When a size matters, the header `<cstdint>` offers *fixed-width* types such as `std::int32_t`, `std::uint8_t` and `std::int8_t`, where the number is the bits and the size is the same on every machine. PROS uses these: the Smart Port numbers you'll meet soon are `std::int8_t`, one signed byte, which is plenty for ports 1 to 21.
+
+## A bucket that never changes: const
+
+Some numbers should never change while the program runs. A wheel is 3.25 inches across, a motor's maximum voltage is 12000 mV. Mark those with `const`, and you get a <Term id="constant">constant</Term>.
+
+```cpp
+const double WHEEL_DIAMETER = 3.25;
+const int MAX_VOLTAGE = 12000;
+```
+
+The compiler refuses any later line that tries to assign to it. This is a protection against your own mistakes, and a way of telling the next reader "this value is a fact, not a state." This guide writes constant names in `UPPER_CASE`.
+
+Naming the number also helps in another way. Compare `distance / 3.25` with `distance / WHEEL_DIAMETER`. The second says what the number *is*. And when the wheels change to 4 inches, you edit one line instead of hunting down every 3.25 in the program, some of which might be 3.25 for a completely different reason.
+
+The bare `3.25` or `12000` typed straight into code is called a <Term id="literal">literal</Term>. Programmers call a literal that appears with no name, in the middle of an expression, a *magic number*, since nobody can tell why it's there. A literal has a type too: `3.25` is a `double`, `42` is an `int`, `true` is a `bool`, and `'A'` is a `char`.
+
+A `const` variable is still a variable with a type, and the compiler may still give it a bucket in memory. There's also a stronger form, `constexpr`, which promises the value is known while the code is being compiled, so the compiler can fold it into the instructions directly. For a constant like the ones above, you can use either. Read cppreference's page on [`constexpr`](https://en.cppreference.com/cpp/language/constexpr) once you're curious.
+
+## Scope: where a name exists
+
+Buckets don't live forever, and a name isn't usable everywhere. The <Term id="scope">scope</Term> of a name is the part of the program where it can be used. For most variables, that's decided by braces. A name exists from the line where it's declared to the closing brace of the block it's in.
+
+<Scene name="cpp-foundations/scope-trace">
+Step through all seven lines. Watch the second `speed` appear, and then watch what the closing brace destroys.
+</Scene>
+
+A <Term id="local-variable">local variable</Term> is declared inside a function or a block, and it's created when the program reaches its declaration and destroyed at the closing brace. That's the reason using `extra` after the block would be a compile error: by then the bucket is gone, and its bytes are free for something else to reuse.
+
+The animation also shows **shadowing**. The inner `speed` is a separate bucket with the same name, and inside the block, the name refers to the nearest one. The outer `speed` is still there, untouched. Shadowing compiles without complaint, but it's a classic source of confusing bugs, because a reader (including you, next week) can't easily tell which `speed` a line means. Avoid reusing a name that an outer block already has.
+
+A <Term id="global-variable">global variable</Term> is declared outside every function. Any code below it can read and change it, and it lasts as long as the program runs. That sounds convenient, and it's why beginners reach for globals. It's also how programs become hard to fix. If a global is ever wrong, the culprit can be any line anywhere, so you have to search the whole program. A local can only be touched by the lines in its block, so there are few suspects.
+
+Prefer locals, and keep each variable's scope as small as you can. Globals still have a place, mostly for things that are truly shared, and mostly `const`. Robot code has one very common example: the motor and sensor objects are declared at the top of the file, as globals, because both the driver-control code and the autonomous code need the same ones. A global constant is safe because nothing can change it. A global you *can* change needs more care, and later pages cover how to share it without the mess. For learncpp's view, read [why non-const globals are evil](https://www.learncpp.com/cpp-tutorial/why-non-const-global-variables-are-evil/).
+
+## Reading uninitialized memory
+
+Go back to the bucket-memory animation, and recall that every byte held something before any variable arrived. Now consider this line.
+
+```cpp
+int speed;
+```
+
+It declares a bucket but gives it no first value. The bytes the compiler claimed still hold whatever the last user left there, so `speed` starts as an <Term id="uninitialized-variable">uninitialized variable</Term>: a leftover number from earlier, which could be 0 or -83,172 or 50. Reading it is undefined behavior again. On one run it might happen to be 0 and your code looks fine. On the robot, the same bug may show up as a motor jolting to full speed at the start of a match.
+
+There's a twist worth knowing. Globals are set to zero before the program starts, but locals are not. So an uninitialized global looks harmless while an uninitialized local is a trap, and moving a variable from one place to the other can change a program's behavior.
+
+The fix is a habit: give every variable a value on the line that declares it. If you don't have the real value yet, pick a sensible starting one, such as 0.
+
+<ReadTheDocs>
+learncpp's article on [uninitialized variables and undefined behavior](https://www.learncpp.com/cpp-tutorial/uninitialized-variables-and-undefined-behavior/) explains why compilers don't just zero everything. Find the reason it gives. For ranges, cppreference's [fundamental types](https://en.cppreference.com/cpp/language/types) page has a table of how large each type is allowed to be. Find which types the standard promises a minimum size for.
+</ReadTheDocs>
+
+You can now hold numbers, truthfulness and letters, but only hold them. You can't yet add, compare, or choose between them. That's [Math and Decisions](../math-and-decisions/).
+
+<Check prompt="A beginner writes int percent = 100 * 0.875; and prints percent. What comes out, and where did the rest of the number go?">
+It prints 87. The product is 87.5, worked out as a decimal, and the `int` bucket drops everything after the point (it doesn't round). No error appears, since `=` allows the loss. Writing `int percent{100 * 0.875};` with braces would not compile.
+</Check>
+
+<Check prompt="A one-byte signed counter holds 127 and the program adds 1. What can you say about the result, and how would you change the design if the counter has to reach 200?">
+The byte becomes 10000000, which the signed reading calls -128. For a one-byte type that is what you will see in practice, and it is still a bug, because the counter went backward. For 200, use a type with enough range: an unsigned byte reaches 255, and an `int` reaches over 2 billion with plenty of room.
+</Check>
+
+A last one, about scope.
+
+```cpp
+int x = 1;
+{
+    int x = 2;
+    x = x + 10;
+}
+std::cout << x << "\n";
+```
+
+<Check prompt="What does that print? Which x does each line use?">
+It prints 1. Inside the braces `x` names the inner bucket, so the 10 is added to that one (making 12), and the closing brace destroys it. The outer `x` was never touched.
+</Check>
