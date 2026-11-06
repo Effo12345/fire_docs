@@ -1,12 +1,14 @@
 ---
-import { curriculum } from '../data/curriculum.mjs';
+import { writtenCurriculum } from '../data/curriculum.mjs';
 
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 ---
 <ol class="fd-chapters">
-    {curriculum.map((section) => (
+    {writtenCurriculum.map((section) => (
         <li>
-            <a href={`${base}/${section.dir}/${section.pages[0][0]}/`}>{section.label}</a>
+            {section.pages.length > 0
+                ? <a href={`${base}/${section.dir}/${section.pages[0][0]}/`}>{section.label}</a>
+                : <span class="fd-chapter-soon">{section.label} <small>(coming soon)</small></span>}
             <p>{section.blurb}</p>
         </li>
     ))}

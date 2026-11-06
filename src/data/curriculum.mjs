@@ -67,3 +67,32 @@ export const curriculum = [
         ['glossary', 'Glossary'],
     ]},
 ];
+
+// Pages still being written. They keep their URLs so links into them work, but stay out of the sidebar
+const unwritten = new Set([
+    'feedback-control/why-control-theory',
+    'feedback-control/units-and-frames',
+    'feedback-control/closing-the-loop',
+    'seeing-inside/brain-screen',
+    'seeing-inside/sd-card-logging',
+    'seeing-inside/tasks',
+    'bigger-programs/multiple-files',
+    'bigger-programs/structs',
+    'bigger-programs/classes',
+    'bigger-programs/composition-and-inheritance',
+    'bigger-programs/virtual-functions',
+    'bigger-programs/smart-pointers',
+    'bigger-programs/vector',
+    'localization/why-wheel-odometry',
+    'localization/tracking-wheels',
+    'localization/position-tracking-math',
+    'following-paths/pure-pursuit',
+    'following-paths/boomerang',
+    'following-paths/choosing-a-follower',
+]);
+
+// The table of contents without unwritten pages. A section with nothing written has no pages here
+export const writtenCurriculum = curriculum.map((section) => ({
+    ...section,
+    pages: section.pages.filter(([slug]) => !unwritten.has(`${section.dir}/${slug}`)),
+}));

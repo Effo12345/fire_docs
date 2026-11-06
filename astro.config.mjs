@@ -2,7 +2,7 @@ import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
-import { curriculum, SITE_TITLE } from './src/data/curriculum.mjs';
+import { writtenCurriculum, SITE_TITLE } from './src/data/curriculum.mjs';
 import codeTheme from './src/data/blackboard-code-theme.json' with { type: 'json' };
 
 // GitHub Pages serves the site from a subfolder named after the repo
@@ -65,7 +65,7 @@ export default defineConfig({
                     },
                 },
             },
-            sidebar: curriculum.map((section) => ({
+            sidebar: writtenCurriculum.filter((section) => section.pages.length > 0).map((section) => ({
                 label: section.label,
                 collapsed: true,
                 items: section.pages.map(([slug]) => ({ slug: `${section.dir}/${slug}` })),

@@ -168,3 +168,5 @@ fire-scene { display: block; }
 .fd-chapters li { margin: 0; padding: 0.8rem 0; border-bottom: 1px solid var(--fd-rule); }
 .fd-chapters a { font-size: 1.15rem; font-weight: 600; text-decoration: none; }
 .fd-chapters p { margin: 0.1rem 0 0; color: var(--fd-ink-dim); }
+.fd-chapter-soon { font-size: 1.15rem; font-weight: 600; color: var(--fd-ink-dim); }
+.fd-chapter-soon small { font-weight: 400; font-size: 0.85rem; }
