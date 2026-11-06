@@ -1,5 +1,241 @@
 ---
-title: "Math and Decisions"
+title: Math and Decisions
+description: Doing arithmetic on variables, the surprises that come with it, and making a program choose what to do.
 ---
+import Scene from '../../../components/Scene.astro';
+import Check from '../../../components/Check.astro';
+import ReadTheDocs from '../../../components/ReadTheDocs.astro';
+import Hl from '../../../components/Hl.astro';
+import Term from '../../../components/Term.astro';
+import T from '../../../components/T.astro';
 
-This page is being written.
+The last page gave you named boxes that hold numbers. Boxes that only sit there aren't much use. A robot has to add up distances, scale a joystick reading into a motor speed, and notice when the battery is low. Two things are missing: a way to compute new values from old ones, and a way to pick which code runs.
+
+Computing comes first. The examples run as written in the setup from [Trying code without a robot](../variables-types-scope/#trying-code-without-a-robot): put each snippet inside the braces of `main`.
+
+## Expressions
+
+An <Term id="expression">expression</Term> is any piece of code that works out to a single value. `7` is one. So is `batteryPercent`, and so is `speed * 2 + 1`. Expressions are built from <Term id="operator">operators</Term>, the symbols that do something to values, and <Term id="operand">operands</Term>, the values they work on. In `2 + 3`, the `+` is the operator and the 2 and 3 are its operands.
+
+```cpp
+int speed = 40;
+int boosted = speed * 2 + 1;
+std::cout << boosted << "\n";
+```
+
+The right side of that second line is an expression. The computer works it out to 81, and then the `=` copies that value into the `boosted` box. That is the whole job of `=`: it never means "is equal to", only "store this".
+
+When an expression has several operators, something has to decide which goes first. The rules are called <Term id="operator-precedence">operator precedence</Term>, and for arithmetic they match what you learned in school: `*`, `/` and `%` rank above `+` and `-`, and operators of equal rank run left to right. Press play and watch an expression collapse in that order.
+
+<Scene name="cpp-foundations/expression-steps">
+The highlighted piece is the one worked out next. Pause at the second step and ask yourself why 10 + 4 didn't go first.
+</Scene>
+
+Parentheses override everything, and they cost nothing, so use them whenever the order isn't obvious at a glance. Nobody reading `a + b * c % d` should have to look up the table. The full list is on [cppreference](https://en.cppreference.com/w/cpp/language/operator_precedence), and you'll rarely need more than the few rules above.
+
+Changing a variable using its own value is so common that it has shorthand:
+
+```cpp
+int total = 10;
+total += 5;    // same as total = total + 5
+total -= 2;    // same as total = total - 2
+total++;       // same as total += 1
+std::cout << total << "\n";
+```
+
+`++` and `--` add or subtract one. They appear in almost every loop, which is where the next page uses them. Use it only on a line of its own for now. The learncpp article on [increment and decrement](https://www.learncpp.com/cpp-tutorial/increment-decrement-operators-and-side-effects/) covers why.
+
+## The integer division surprise
+
+Say three motors report speeds of 50, 80 and 100, and you want the average. The sum is 230, and 230 divided by 3 is 76.67. Try it:
+
+```cpp
+int total = 230;
+int average = total / 3;
+std::cout << average << "\n";
+```
+
+It prints 76. Not 77, and not 76.67. When both operands are integers, C++ does <Term id="integer-division">integer division</Term>: it works out how many whole times the divisor fits and throws the rest away. It doesn't round. It truncates, which means it cuts off everything after the decimal point, so 7 / 2 is 3 and also 99 / 100 is 0.
+
+An integer box has no place to keep a fraction, so this is the only answer that fits. It's still the most common arithmetic bug for new programmers, because the code looks right. The animation shows the whole division as counting full groups.
+
+<Scene name="cpp-foundations/int-division">
+Move <em>a</em> and <em>b</em>. Watch the <Hl c="error">leftover dots</Hl>. They are exactly what `a / b` drops, and the next section gives them a name. Find a pair where `a / b` is 0 even though <em>a</em> is not.
+</Scene>
+
+Two consequences catch people out in real code. First, the order of operations matters more than it looks. `1 / 2 * x` is `(1 / 2) * x`, which is `0 * x`, which is always 0, whatever `x` is. Second, in an expression like `a * b / c`, the multiplication happens first, and if `a * b` is bigger than an `int` can hold, it <T id="overflow">overflows</T> before the division gets a chance to bring it back down. With 50000 for `a` and `b`, the product (2.5 billion) doesn't fit in the 4 bytes of an `int`, even if `c` is 100000 and the true answer would be small.
+
+Dividing an integer by zero is undefined behavior, which means the language makes no promise about what happens. The program might crash or keep going with nonsense.
+
+## The remainder operator
+
+Integer division throws the leftover away. The <Term id="modulo">modulo</Term> operator `%` keeps only the leftover.
+
+```cpp
+std::cout << 7 / 2 << "\n";    // 3, whole groups
+std::cout << 7 % 2 << "\n";    // 1, what's left over
+```
+
+`a / b` and `a % b` always go together: `(a / b) * b + a % b` gives back `a`. The most useful trick is that `x % n` is always between 0 and `n - 1` for positive `x`, so it makes a counter wrap around. If an arm has four preset positions numbered 0 to 3, then `position = (position + 1) % 4;` goes 0, 1, 2, 3, 0, 1, and never leaves the range. Checking `x % 2 == 0` tells you whether `x` is even.
+
+One trap for experienced readers: with negative numbers, C++ truncates toward zero, so `-7 / 2` is -3, and `-7 % 3` is -1, not 2. That makes `(position - 1) % 4` return -1 when `position` is 0, which would be an out-of-range index. The usual fix is to add the range first: `(position - 1 + 4) % 4`. The learncpp article on [remainder](https://www.learncpp.com/cpp-tutorial/remainder-and-exponentiation/) shows more cases.
+
+## Mixing types
+
+What if you want the 76.67? Make one of the operands a `double`. When an operator gets two different types, the compiler converts the narrower one to match the wider, using the usual arithmetic conversions. This is an <Term id="implicit-conversion">implicit conversion</Term>: you never asked for it, and the code doesn't show it.
+
+```cpp
+int total = 230;
+std::cout << total / 3 << "\n";      // 76, int and int
+std::cout << total / 3.0 << "\n";    // 76.6667, the 3 became 3.0
+```
+
+A literal like `3.0` fixes it for a constant. For a variable, use a <Term id="type-cast">type cast</Term>, which asks for a conversion in code. In C++ the explicit one is `static_cast`:
+
+```cpp
+int total = 230;
+int count = 3;
+double average = static_cast<double>(total) / count;
+std::cout << average << "\n";    // 76.6667
+```
+
+The cast makes a temporary `double` copy of `total`, and then `count` is converted to match. Where you put the cast matters. `static_cast<double>(total / count)` divides first, gets 76, and only then converts it to 76.0. The damage is already done. The last line of the integer-division animation shows the safe order, casting `a` before dividing.
+
+Implicit conversions that go the other way lose information. `int x = 3.7;` compiles and stores 3, as the last page showed. A worse one hides in comparisons: when a signed and an unsigned integer meet, the signed one is converted to unsigned, so `-1 < 1u` is false, because -1 becomes a huge number. Turn on compiler warnings and read them. The learncpp pages on [implicit conversion](https://www.learncpp.com/cpp-tutorial/implicit-type-conversion/) and [explicit casting](https://www.learncpp.com/cpp-tutorial/explicit-type-conversion-casting-and-static-cast/) cover the full rules.
+
+## Decimals are approximate
+
+Doubles solve the fraction problem, but with a catch of their own. Type this in:
+
+```cpp
+double sum = 0.1 + 0.2;
+std::cout << (sum == 0.3) << "\n";    // prints 0
+```
+
+It prints 0, which is how `cout` shows `false`. The cause is how a double is stored: a fixed number of <T id="bit">bits</T> picks one value from a finite set, spaced out along the number line. A decimal like 0.1 isn't in the set, for the same reason 1/3 has no finite decimal: in binary, 0.1 repeats forever, so the computer stores the closest double it has. Each stored value is slightly off, and the tiny gap is called <Term id="floating-point-error">floating-point error</Term>. Add two of them and the result lands on a different neighbor than the stored 0.3.
+
+Drag the zoom slider all the way in. The numbers under the line are the exact values, worked out in full.
+
+<Scene name="cpp-foundations/float-grid">
+Zoom in until the dots separate. The two values are neighbors, one dot apart, and nothing between them can be stored. Doubles near 0.3 are spaced about 5.6 x 10^-17 apart.
+</Scene>
+
+The error is tiny, about 17 digits down, so it doesn't matter for a robot's motion. It matters when you test for equality. Two numbers that should be equal often aren't, so don't ask `==` on doubles. Ask whether they're close enough. `std::abs` drops a number's sign, and it needs `#include <cmath>` above `main`:
+
+```cpp
+#include <cmath>
+
+double a = 0.1 + 0.2;
+double b = 0.3;
+bool same = std::abs(a - b) < 1e-9;
+std::cout << same << "\n";    // 1
+```
+
+`1e-9` is scientific notation for 0.000000001. Pick a tolerance that suits the problem; for sensor readings in inches, 0.001 is often plenty. For very large or very small numbers, an experienced programmer compares relative to the size of the values, which the learncpp article on [floating-point comparisons](https://www.learncpp.com/cpp-tutorial/relational-operators-and-floating-point-comparisons/) walks through. And errors build up: adding 0.1 ten thousand times gives 1000.0000000001588, not 1000. A long-running integrator, like the sum in a PID controller, is exactly where that shows up later.
+
+## Asking questions: comparisons
+
+So far every line ran. A program becomes useful when it can look at a value and choose. The first step is a question with a yes-or-no answer, called a <Term id="condition">condition</Term>. Conditions are made with <Term id="comparison-operator">comparison operators</Term>:
+
+| Operator | Question |
+|---|---|
+| `==` | equal? |
+| `!=` | not equal? |
+| `<` `>` | less than? greater than? |
+| `<=` `>=` | less than or equal? greater than or equal? |
+
+Each one produces a <T id="boolean">bool</T>, `true` or `false`, so a comparison is just another expression and its result can be stored: `bool low = batteryPercent < 20;`.
+
+Notice that checking equality is `==`, two symbols, and assignment is `=`. Mixing them up is a classic bug, and a nasty one because both forms compile:
+
+```cpp
+int level = 0;
+if(level = 5) {                  // assigns 5, then asks if 5 is true
+    std::cout << "always\n";
+}
+```
+
+That stores 5 in `level`, and the value of an assignment is the value stored. Any nonzero number counts as true, so the body always runs. Compilers warn about it, which is one more reason to read warnings.
+
+Another comparison that compiles and means something else is `0 < x < 10`. It reads like math, but C++ works it out left to right: `0 < x` becomes true or false, which is 1 or 0, and then `1 < 10` is always true. What you meant is the next section.
+
+## Combining questions
+
+A real decision often depends on two things at once. <Term id="logical-operator">Logical operators</Term> join conditions together:
+
+| Operator | Name | True when |
+|---|---|---|
+| `&&` | and | both sides are true |
+| `\|\|` | or | at least one side is true |
+| `!` | not | the side is false |
+
+So the right way to write the range check is `0 < x && x < 10`. As with arithmetic, there's precedence: `!` goes first, then `&&`, then `||`. That means `a || b && c` is `a || (b && c)`.
+
+Here's a detail that matters in practice. `&&` and `||` read left to right and stop as soon as the answer is known. If the left side of `&&` is false, the whole thing is false whatever the right side says, so C++ never runs the right side. This is <Term id="short-circuit">short-circuit evaluation</Term>.
+
+<Scene name="cpp-foundations/short-circuit">
+Step through both versions. They contain the same two tests, and one of them is safe. Which of the two tests has to come first, and why?
+</Scene>
+
+That skipping is a tool. Putting the safe test on the left guards the risky one on the right: `n != 0 && sum / n > 2` can never divide by zero. Swap the order and the guard is gone. The same pattern protects against array indexes that are too big, and null pointers, which are both coming up. `||` works the mirror way: if the left side is true, the right side is skipped.
+
+The skipping also means anything with a side effect on the right, like `x++`, might not happen. Keep tests free of side effects, so you never have to think about it.
+
+## Making a choice: if and else
+
+Now the conditions can drive something. Recall the instruction from [Inside a Computer](../../start-here/inside-a-computer/) that said "if this register is zero, go to a different instruction". That is the machine-level version of every decision in this section. Normally the <T id="program-counter">program counter</T> steps to the next instruction, and a conditional jump lets it skip ahead instead. An `if` statement is how you ask for one.
+
+```cpp
+int batteryPercent = 15;
+
+if(batteryPercent < 20) {
+    std::cout << "low\n";
+}
+```
+
+The test goes in parentheses, and the code in braces runs only if it's true. Add `else` for the other case. Either path the program can take is a <Term id="branch">branch</Term>, which is also the word for the point where it picks. You can chain more tests with `else if`:
+
+```cpp
+int batteryPercent = 65;
+int speed = 0;
+
+if(batteryPercent < 20) {
+    speed = 0;
+} else if(batteryPercent < 50) {
+    speed = 40;
+} else {
+    speed = 100;
+}
+```
+
+The tests run from top to bottom, and the first true one wins. The rest, including the final `else`, are skipped. Drag the battery and watch which branch lights up.
+
+<Scene name="cpp-foundations/if-branches">
+Move the battery through 19, 20 and 49. Then set the second slider to 1, which swaps the first two tests, and slide the battery to 10.
+</Scene>
+
+With the tests swapped, a battery of 10 gives 40. The first test, `batteryPercent < 50`, is already true, so the check for below 20 never gets its turn. Nothing is wrong with either test alone. The mistake is in the order. When you write a chain, put the most specific condition first, and read the chain top to bottom pretending the earlier ones failed.
+
+Always use the braces, even for a single line. Without them, `if` covers only the very next statement, and adding a second line later silently changes the meaning. The learncpp [if statements](https://www.learncpp.com/cpp-tutorial/introduction-to-if-statements/) and [common problems](https://www.learncpp.com/cpp-tutorial/common-if-statement-problems/) pages are worth a skim.
+
+<ReadTheDocs>
+Open [cppreference's page on `if`](https://en.cppreference.com/w/cpp/language/if) and find the form that lets you declare a variable inside the parentheses, before the condition. It limits that variable's <T id="scope">scope</T> to the statement, and you'll see it in real code.
+</ReadTheDocs>
+
+A robot has dozens of readings, not one. The next page covers keeping many values together and running code repeatedly.
+
+<Check prompt="A score of 87 goes into `int score`, and a quiz has 4 questions. What does `score / 4` give, and how do you get 21.75?">
+It gives 21, because both operands are integers. Cast one of them: `static_cast<double>(score) / 4`, or divide by `4.0`. Casting the result instead, `static_cast<double>(score / 4)`, would still give 21.0.
+</Check>
+
+<Check prompt="What does `-7 % 3` give, and why does that break `(position - 1) % 4` as a way to step backward?">
+It gives -1, because C++ truncates toward zero and the remainder takes the sign of the left operand. When `position` is 0, `(0 - 1) % 4` is -1, which isn't a valid index from 0 to 3. Add the range first: `(position - 1 + 4) % 4`.
+</Check>
+
+<Check prompt="Write one condition that is true when a speed is between 10 and 90, including both ends. Why is `10 <= speed <= 90` wrong?">
+`10 <= speed && speed <= 90`. The chained version works out `10 <= speed` first, getting 0 or 1, and then compares that to 90, which is always true.
+</Check>
+
+<Check prompt="In `if(count > 0 && total / count > 50)`, what stops a divide-by-zero when count is 0?">
+Short-circuit evaluation. With `count` at 0 the left side is false, so `&&` is already decided and the division on the right never runs.
+</Check>
