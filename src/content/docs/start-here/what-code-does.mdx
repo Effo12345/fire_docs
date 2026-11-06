@@ -1,5 +1,189 @@
 ---
-title: "What Code Actually Does"
+title: What Code Actually Does
+description: How a line of C++ becomes machine code, what a compiler and a bug are, why this guide uses C++, and where you'll try it first.
 ---
+import Scene from '../../../components/Scene.astro';
+import Check from '../../../components/Check.astro';
+import ReadTheDocs from '../../../components/ReadTheDocs.astro';
+import Term from '../../../components/Term.astro';
+import T from '../../../components/T.astro';
+import Hl from '../../../components/Hl.astro';
 
-This page is being written.
+The last page ended with a four-instruction program that added 7 and 5. The CPU ran it without any trouble, because to a CPU an instruction is just a number. Try writing a whole robot program that way, as rows of numbers like `e5903008`, with every piece of data tracked by its <T id="address">address</T>. It can be done, and people did it. You'd spend your whole season on it, and one mistyped digit would send the robot somewhere unexpected.
+
+So people built tools that let us write something readable, and then translate it into the numbers for us.
+
+## Why not write numbers?
+
+The first step up is <Term id="assembly-language">assembly language</Term>: the same <T id="instruction">instructions</T> as the <T id="machine-code">machine code</T>, with short names instead of numbers. That's the form you saw in the animation, like `load r0, [2]`. Each line is still exactly one instruction, so you still decide which <T id="register">register</T> holds what, and there is a different assembly language for each kind of CPU. The assembly on this page is a simplified teaching form. Real ARM assembly, which you'll see in a moment, is close to it but fussier.
+
+Assembly is easier than raw numbers but still tedious. Adding two numbers took four lines. A real robot program would take hundreds of thousands. So the next step up is a <Term id="high-level-language">high-level language</Term>, where you describe *what* you want in terms closer to ideas, and a tool works out the individual instructions. C++, Python and the block coding in VEXcode are all high-level languages.
+
+## One line, four instructions
+
+Here's the whole addition from the last page as one line of C++:
+
+```cpp nocheck
+total = first + second;
+```
+
+What you type is called <Term id="source-code">source code</Term>: plain text, kept in files, that a person can read. A CPU can't run it. A program called a <Term id="compiler">compiler</Term> reads the source code and writes out machine code for one specific kind of CPU. To <Term id="compile">compile</Term> is to run the compiler on source code.
+
+<Scene name="start-here/compile-line">
+Pause where the names get their addresses and check them against the memory row. Then watch the hex numbers appear, and see where the line ends up.
+</Scene>
+
+Two things in that scene are worth slowing down for.
+
+First, the names <Hl c="value">first</Hl>, <Hl c="value">second</Hl> and <Hl c="target">total</Hl> were never in the machine code. The compiler decided which box each one lives in, and then used only the address. Names are for you, and the CPU never sees them. The scene fixes the addresses at 2, 5 and 6 to match the last page. A real compiler picks them itself, and often keeps a value in a register for its whole life and never gives it a memory box at all.
+
+Second, those hex numbers aren't made up. They come from a real ARM compiler, `arm-none-eabi-g++ -mcpu=cortex-a9`, which targets the same family of processor as the V5 Brain. Its input was this:
+
+```cpp
+void addTo(int* memory) {
+    memory[6] = memory[2] + memory[5];
+}
+```
+
+`memory[2]` means "the box at position 2", and `int* memory` means "the start of a row of boxes". [Arrays and Loops](../../cpp-foundations/arrays-and-loops/) explains both properly. They're only here to pin the names to addresses 2, 5 and 6. With optimization turned on (`-O2`, more on that below), the compiler's whole answer was:
+
+```asm
+ldr     r3, [r0, #8]
+ldr     r2, [r0, #20]
+add     r3, r3, r2
+str     r3, [r0, #24]
+bx      lr
+```
+
+It's the same program: load, load, add, store. `ldr` is a load, `str` is a store, and the compiler chose different registers than the teaching version did. The numbers in brackets count in bytes rather than boxes, so `#8` means 8 bytes from the start, which is box 2 when each <T id="word">word</T> is 4 bytes. The last instruction, `bx lr`, hands control back to whatever ran this code. [Functions](../../cpp-foundations/functions/) covers that.
+
+## Statements run in order, and `=` is a write
+
+A C++ program is a list of <Term id="statement">statements</Term>: complete commands, most of them ending in a semicolon. The CPU runs them one after another from top to bottom, the same way it ran the instructions: whatever the <T id="program-counter">program counter</T> points at, then the next one.
+
+That gives `=` a meaning that surprises almost everyone who has seen algebra. In math, `total = first + second` states a fact that stays true. In C++ it's an action. It reads two boxes, adds, writes the answer to a third box, and is finished.
+
+<Scene name="start-here/statement-trace">
+Step through to the last line and look at `total`. If it were a lasting relationship, it would have changed.
+</Scene>
+
+Each name in the scene is a box that holds one value at a time. Making one with `int` is covered in [Variables, Types, and Scope](../../cpp-foundations/variables-types-scope/). For now, read `int first = 7;` as "make a box called `first` and write 7 in it."
+
+The four statements wrote to three boxes. Changing `first` afterward does nothing to `total`, since the statement that set `total` was a single write that already happened. If you want `total` to follow `first`, you run that statement again.
+
+## The CPU only has jumps
+
+The program counter normally moves down by one. The last page mentioned an instruction that says "if this register is zero, go to a different instruction". That one idea is how everything else in programming works. There's no instruction for `if`, and none for a loop. There's only compare, and *jump*: write a new number into the program counter, so the next fetch comes from somewhere else.
+
+A decision is a compare followed by a jump over the code you want skipped. A loop is a jump backward, to an earlier address, so those instructions run again. Here is real compiler output (without optimization, so it stays easy to follow) for a decision, `if(distance < 20)` followed by one statement:
+
+```asm
+cmp     r3, #19
+bgt     .L3
+ldr     r3, [fp, #-12]
+mov     r2, #0
+str     r2, [r3]
+.L3:
+```
+
+`cmp` compares `distance` against 19 (for whole numbers, "less than 20" is the same as "at most 19"), and `bgt` means "jump to `.L3` if it was greater". The three lines in the middle are the block inside the braces. When the jump happens, they're passed over.
+
+<Scene name="start-here/branch-jump">
+Set the slider just below 20 and just above it. Watch the highlighted instruction, the PC, and which lines get skipped.
+</Scene>
+
+Skipping isn't a special power. The CPU is still doing fetch, decode, execute, and one of the instructions it executes happens to change the program counter. Programmers call a jump like this a <T id="branch">branch</T>, and you'll meet branches again in [Math and Decisions](../../cpp-foundations/math-and-decisions/).
+
+## What the toolchain leaves you
+
+The compiler is one tool in a chain. Together they're the <Term id="toolchain">toolchain</Term>: compiler, assembler, linker, and a few helpers. Each step takes the previous step's output. The compiler turns each of your source files into machine code with the addresses not yet settled. A step called the <T id="linker">linker</T> joins those pieces, plus code from any <Term id="library">libraries</Term> you use (ready-made code written by someone else, like PROS itself), and settles the final addresses. It matters a lot once your program spans several files, and [Splitting Code Across Files](../../bigger-programs/multiple-files/) comes back to it. Running the whole chain on your project is a <Term id="build">build</Term>.
+
+What comes out is a <Term id="binary-file">binary file</Term>: a file of nothing but machine code and the data that goes with it. In a PROS project it appears in the `bin` folder as a `.bin` file. Uploading puts it in the Brain's <T id="flash-memory">flash memory</T>, which keeps it with the power off. VEX doesn't document exactly how the Brain starts a program. What we can see is that PROS links its code to run from <T id="ram">RAM</T> addresses starting at `0x03800000`, in the `v5.ld` linker script in the [PROS repository](https://github.com/purduesigbots/pros/blob/4.2.3/firmware/v5.ld). Flash survives power loss and RAM doesn't, so the likely picture is that the program is copied from flash into RAM and the CPU fetches from there. Treat that as a good mental model rather than a documented fact.
+
+The compiler is also free to be clever. The `addTo` function above came out as four instructions (plus the return) with `-O2`. With optimization off (`-O0`), the same source produced eighteen:
+
+```asm
+str     fp, [sp, #-4]!
+add     fp, sp, #0
+sub     sp, sp, #12
+str     r0, [fp, #-8]
+ldr     r3, [fp, #-8]
+add     r3, r3, #8
+ldr     r1, [r3]
+ldr     r3, [fp, #-8]
+add     r3, r3, #20
+ldr     r2, [r3]
+ldr     r3, [fp, #-8]
+add     r3, r3, #24
+add     r2, r1, r2
+str     r2, [r3]
+nop
+add     sp, fp, #0
+ldr     fp, [sp], #4
+bx      lr
+```
+
+That's <Term id="optimization">optimization</Term>: the compiler rewriting your program into machine code that does the same job faster or smaller. The slow version keeps everything in memory and reloads it every time. The fast version kept it in registers. The compiler follows the rules of the language and doesn't translate word for word, so the machine code won't look like your source line by line. The PROS 4.2.3 `common.mk` builds with `-Os`, which means "make the code small". The [GCC manual](https://gcc.gnu.org/onlinedocs/gcc/Optimize-Options.html) lists every level.
+
+## Why C++
+
+C came first, in the early 1970s: a language close to the hardware, made for writing software like operating systems. In 1979 Bjarne Stroustrup began adding tools for organizing larger programs to C, while keeping its speed, and by the end of 1983 the result was called C++. His [FAQ](https://www.stroustrup.com/bs_faq.html#invention) tells the story in his own words, and [Classes](../../bigger-programs/classes/) teaches those tools.
+
+You have many choices of language for a VEX robot. Here is why this guide picked C++:
+
+- **It's compiled to machine code for your CPU.** An <Term id="interpreter">interpreter</Term>, which Python usually uses, is a program that reads your code and carries it out while it runs, so a translator sits between your code and the hardware the whole time. That costs speed. C++ has done all the translating before the robot ever moves.
+- **You decide where things live in memory.** That's more work, and it's how you control what the program does with a tiny, fixed amount of it.
+- **Timing is predictable.** Control loops in this guide run every 10 ms, and a language that pauses at random to clean up after itself makes that hard. C++ doesn't do that unless you ask.
+- **PROS speaks it directly.** PROS itself is written in C and C++, and its functions are available in both.
+
+It has a cost too. C++ lets you make mistakes that crash the program, and it asks for more care when you're starting out. VEX offers other languages, including block coding and Python in VEXcode, and they're fine choices, especially for a first season. This guide picks C++ because techniques like [PID](../../feedback-control/pid/) and [Pure Pursuit](../../following-paths/pure-pursuit/) run in tight, timed loops, and C++ gives you close control over what those loops cost.
+
+## When it goes wrong
+
+Every language has <Term id="syntax">syntax</Term>: its grammar, the exact rules for how statements must be written. A compiler can only translate code that follows them. If it doesn't, you get a <Term id="compile-error">compile error</Term> and no binary file at all. This one is real output from the compiler, for this code, which is missing a semicolon at the end of line 2:
+
+```cpp nocheck
+int main() {
+    int total = 5
+    return total;
+}
+```
+
+```text
+bad.cpp: In function 'int main()':
+bad.cpp:3:5: error: expected ',' or ';' before 'return'
+    3 |     return total;
+      |     ^~~~~~
+```
+
+Read it from the top. The file and function come first, then `3:5`, which is line 3, column 5. The message follows. The compiler reports line 3, because that's where it noticed something was wrong, and the real mistake is at the end of line 2. Errors often point just *after* the problem, so look at the line above too.
+
+Another one you'll see constantly is `'first' was not declared in this scope`, which means you used a name the compiler has never heard of, often because of a typo.
+
+The worse kind of problem is a <Term id="bug">bug</Term>: the code compiles with no complaint and does the wrong thing. If you wrote `if(distance > 20)` when you meant `<`, the compiler has no way to know. It translates what you wrote, and the CPU does precisely that, every time. Nothing in the machine went wrong. The program was wrong. Finding and fixing bugs is <Term id="debugging">debugging</Term>, and you'll spend a lot of time on it.
+
+## Where you'll run your code
+
+You don't need to install anything yet. [C++ Foundations](../../cpp-foundations/variables-types-scope/) teaches the language with small programs that don't involve a robot, so any online compiler works. [OnlineGDB](https://www.onlinegdb.com/online_c++_compiler) lets you type C++ in the browser and press Run.
+
+To see what your code turns into, try [Compiler Explorer](https://godbolt.org/). It shows the assembly beside your source and highlights which lines go together, using whichever compiler you pick. Paste in `total = first + second;` inside a function and see what it does.
+
+The real setup, with PROS, VS Code and a robot, comes in [Installing PROS](../../first-robot-program/installing-pros/).
+
+<ReadTheDocs>
+Read learncpp's [introduction to the compiler, linker and libraries](https://www.learncpp.com/cpp-tutorial/introduction-to-the-compiler-linker-and-libraries/) and [syntax and semantic errors](https://www.learncpp.com/cpp-tutorial/syntax-and-semantic-errors/). Find the name it gives to an error where the code is valid but does the wrong thing.
+</ReadTheDocs>
+
+Next, [How to Use This Guide](../how-to-use-this-guide/) covers how the rest of the pages work and how to find answers when the guide doesn't have them.
+
+<Check prompt="After the line total = first + second; runs, you change first and never run that line again. Does total change? Why?">
+No. The statement was a single write to `total`, and it finished. `=` copies a result into a box once and doesn't keep the names connected.
+</Check>
+
+<Check prompt="In the compare-and-jump example, what number is written to the program counter when the jump happens, and what is the effect on the instructions in between?">
+The address of the instruction after the skipped block (105 in the scene). The program counter just doesn't pass through the skipped addresses, so those instructions never get fetched or run.
+</Check>
+
+<Check prompt="Your robot's code compiles with no errors, but the arm moves the wrong direction. Is that a syntax error or a bug, and what did the CPU do?">
+It's a bug. The syntax was fine, or the compiler would have refused to build it. The CPU did exactly what the instructions said, and the instructions weren't what you meant.
+</Check>
