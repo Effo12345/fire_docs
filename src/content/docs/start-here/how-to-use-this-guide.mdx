@@ -1,5 +1,120 @@
 ---
-title: "How to Use This Guide"
+title: How to Use This Guide
+description: Why the pages go in order, how a page works, how to read the PROS documentation yourself, and why templates don't replace the theory.
 ---
+import Scene from '../../../components/Scene.astro';
+import Check from '../../../components/Check.astro';
+import ReadTheDocs from '../../../components/ReadTheDocs.astro';
+import Term from '../../../components/Term.astro';
+import T from '../../../components/T.astro';
+import Hl from '../../../components/Hl.astro';
+import Api from '../../../components/Api.astro';
+import ChapterList from '../../../components/ChapterList.astro';
 
-This page is being written.
+You know now what a computer does with your code, from the memory boxes up to a compiled program. The rest of the guide uses that. This page covers how to move through it, and the one skill that will outlast it: finding answers in the documentation yourself.
+
+## Read in order, and why
+
+Take a late topic, [Pure Pursuit](../../following-paths/pure-pursuit/), which steers a robot along a path. To follow a path, the program has to store it, and a path is a list of points of unknown length, so it lives in a <T id="vector">`std::vector`</T>. A vector is a growing <T id="array">array</T>, and an array is a row of boxes in memory, which is what [Inside a Computer](../inside-a-computer/) was about. The robot also needs to know where it is, which comes from <T id="odometry">odometry</T>: adding up small movements measured by sensors, again and again, in a <T id="task">task</T> that runs beside your driving code. Every one of those pieces is a page that comes earlier.
+
+That's why the pages are in order. Each page is allowed to use anything before it and nothing after it. A forward link, when you see one, comes with a sentence of explanation so you can keep going. Skipping ahead works until you hit a word or an idea the guide already taught, and then you're stuck guessing.
+
+<ChapterList />
+
+If you already write C++, you can skim [C++ Foundations](../../cpp-foundations/variables-types-scope/) and spend your time on the PROS and control chapters. If you're here to look something up, use the sidebar and the [Glossary](../../reference/glossary/). Every heading is a stable link, so you can send a teammate straight to the part they need.
+
+## How to use a page
+
+Most pages follow the same pattern. A **bold** word is where a term is defined, once in the whole guide. Later, the same word shows up with a dotted underline: hover over it to see the meaning, or click it to jump back to the definition. The [Glossary](../../reference/glossary/) lists them all.
+
+Pages are built around animations, and you're meant to use them. Pause them, drag the timeline back, and move any sliders. The text before a scene tells you what to look for, and the caption under it tells you what to do. Doing it is the point, because a slider you've moved teaches more than a sentence you've read.
+
+The colors in the animations mean the same thing everywhere. <Hl c="value">Blue</Hl> is the quantity being watched, <Hl c="focus">yellow</Hl> is where to look, <Hl c="target">green</Hl> is a goal, and <Hl c="error">red</Hl> is error or something wrong. The words in the text use the same colors to tie them to the picture.
+
+Each page ends with a few **Checks**. Answer in your head, or on paper, before you open the answer. If you can't, the answer is a reason to go back up the page, not a sign you're slow.
+
+Code on later pages is real: it compiles against PROS 4.2.3. Robot code all uses one running robot, so `leftDrive` or `master` means the same thing on every page. To try code, see [Where you'll run your code](../what-code-does/#where-youll-run-your-code).
+
+## How to read documentation
+
+This guide can't teach every function in PROS, and it shouldn't try. The library has far more functions than a season uses, and teams switch libraries and update versions. What does carry over from one season to the next is being able to open the documentation and work it out.
+
+Two kinds of documentation exist, and they do different jobs. A tutorial teaches an idea in an order: this guide is one, and so is [learncpp.com](https://www.learncpp.com/). <Term id="reference-docs">Reference documentation</Term> lists every piece of something, completely and tersely, with no story. [cppreference](https://en.cppreference.com/w/cpp) is the reference for the C++ language, and the [PROS API documentation](https://purduesigbots.github.io/pros-doxygen-docs/api.html) is the reference for PROS. You learn from tutorials and you check facts in references. Beginners often try to read references from the top, and that never works.
+
+An <Term id="api">API</Term> is the list of functions and classes that a library lets your code use, plus the rules for using them. When someone says "the PROS API," they mean everything in PROS that you can call. It's what the reference documents.
+
+Here is one entry from that reference, for the function that sets how hard a group of motors pushes. You haven't learned the C++ to read all of it, and you don't need to yet.
+
+<Scene name="start-here/api-entry">
+Let it play, then pause on each part and say the question out loud before you read the caption. Which parts could you already use?
+</Scene>
+
+Notice how little of it you need to start. The name, the one-sentence brief and the parameter tell you what to call it with. The return value and the errno list tell you what happens when it goes wrong. The example gives you something to copy. The rest is detail about how the function is built, and it becomes useful later.
+
+Two things in the entry deserve a second look. The unit comes first: `move_voltage` takes millivolts, so full power is 12000, not 12. Reading the number without the unit is a common way to break a working program. And a <T id="function-signature">signature</T> shows the type of every <T id="parameter">parameter</T> and of the <T id="return-value">return value</T>, which is how you know whether to pass a whole number or a decimal.
+
+## Looking something up
+
+There is a method, and it works the same way on any library. Say you need the drive motors to run at half power while you test something.
+
+1. **Name the noun and the verb.** The noun is what you act on: the drive motors, held in a motor group. The verb is the action: set how hard they push.
+2. **Find the noun's group.** Open the [PROS API home](https://purduesigbots.github.io/pros-doxygen-docs/api.html) and look for the group about motor groups, "C++ API for Motor Groups". Every class has its own page of entries.
+3. **Scan the function names.** The page lists them all near the top. You're looking for the verb: `move`, `move_velocity`, `move_voltage`, `move_relative`. Several look right.
+4. **Read the brief of each candidate.** One sentence apiece tells you which one does the job. `move_voltage` sets the voltage, and `move_velocity` sets a target speed in RPM.
+5. **Check the parameters, units and return value.** Half power is 6000 millivolts.
+6. **Try it small.** Call it once with a safe value, with the robot on blocks, before you build on it.
+
+```cpp
+leftDrive.move_voltage(6000);
+rightDrive.move_voltage(6000);
+```
+
+That's <Api sym="motor-group/move_voltage" />. The guide trains this in stages. Early pages hand you the exact link and say what to look for. Later pages give you only a name. By [Following Paths](../../following-paths/pure-pursuit/), you'll often be on your own, which is where a real project starts.
+
+There are a few more things to know about, now that you've seen an entry.
+
+**Errors.** Many PROS functions return a value that tells you whether the call worked. On failure they return `PROS_ERR` and also set <Term id="errno">`errno`</Term>, a standard C and C++ variable that holds a number for what went wrong. The docs list the possible codes under each function, like `ENODEV` in the entry above. You don't check them on every call, but when a motor does nothing and you can't see why, the return value and `errno` are the first place to look. See [errno on cppreference](https://en.cppreference.com/w/cpp/error/errno).
+
+**Where the docs come from.** The web page isn't written separately from the code. It's generated, by a tool called Doxygen, from the comments in the PROS header files. You can check this yourself. The comment above `move_voltage` in `include/pros/motor_group.hpp` in your own project says the same words, in a slightly different order. So when the website is down, or you're at a competition with no internet, the headers in your project are the documentation. Many editors can show that comment when you hover over a function name; if yours does, that is the fastest way to check a detail.
+
+**Which version.** Libraries change. The website documents one version, and your project has the one you installed. This guide uses PROS 4.2.3. If the two ever disagree, the header in your project describes what your code actually uses.
+
+<ReadTheDocs>
+Open the [PROS API home](https://purduesigbots.github.io/pros-doxygen-docs/api.html), go to "C++ API for Motor Groups", and find the function that stops a group of motors using the current brake mode. Read its brief, then say what it returns when it works.
+</ReadTheDocs>
+
+## A note on templates
+
+Many teams don't write everything from scratch. They add a community-built package of code to their project, one that already does the harder jobs, like driving a measured distance, turning to an angle, tracking the robot's position or following a path. Two popular ones are [LemLib](https://lemlib.github.io/LemLib/) and [EZ-Template](https://ez-robotics.github.io/EZ-Template/). LemLib describes itself as an open-source PROS template that provides algorithms like Pure Pursuit and odometry, and EZ-Template describes itself as a library that gets a robot moving quickly. Both are well made and widely used, and using one is a reasonable choice.
+
+A word on the word. Here "template" means a code package that teams share. It's unrelated to two other things you'll meet later, a *C++ template* (a way of writing code that works for many types) and the *template* that PROS uses to start a new project. Those come up when they're needed.
+
+You should still learn what's inside, for three reasons. The first is **tuning**. A template doesn't know your robot. It asks you for numbers, and picking them takes an understanding of what they do. The second is **getting the most out of it**. Each template has features and settings that only make sense if you know the idea behind them, and the same understanding tells you what its limits are, and when to change something. The third is **explaining it**. Judged awards at VEX events are decided in part through interviews, according to the REC Foundation's [Guide to Judging](https://kb.roboticseducation.org/hc/en-us/articles/4788499711127), and "we used a library" is a much weaker answer than being able to say how your autonomous finds its way and why you set it up as you did.
+
+Here is the first reason in action. The scene below uses a simple simulated drivetrain and the same code at every moment. The only thing that changes is one number, which is exactly what a template asks you for: the gain, in volts of push per inch of distance left to go. (This is a simplified model, not a measurement of any real robot.)
+
+<Scene name="start-here/template-gain">
+Start at the low end and raise the gain slowly. Stop at the first value where the robot lands on the target, then keep going to the top. Read the line under the graph at each stop.
+</Scene>
+
+At a gain of 0.3, the robot gives up about 3 inches short, since the push gets too weak to beat friction before it arrives. Around 0.6 to 0.7 it lands almost exactly on the target, in under a second. Above 1, it gets there sooner but swings about 2 to 3 inches past and rattles back and forth around the target before it settles. How bad the overshoot gets depends on the robot: this model is heavily damped, and a faster or heavier one can swing a lot further.
+
+Nothing in the code changed. A good value for this robot would be wrong for yours, because it depends on the weight, the gearing, the wheels and the battery. A template can't pick it for you, so you do it, and tuning well takes an understanding of why the response looks like this. [PID](../../feedback-control/pid/) explains exactly that, and shows how two more terms fix what a single gain can't. Once you've read it, and [Pure Pursuit](../../following-paths/pure-pursuit/) and the rest of Following Paths, a template's settings will mean something to you.
+
+Next is [Variables, Types, and Scope](../../cpp-foundations/variables-types-scope/), where you start writing C++.
+
+<Check prompt="A page in this guide mentions a function you haven't seen. Using the method above, what do you do first, and where do you look?">
+Name the noun and the verb, then go to the documentation for the noun's group, such as the page for motor groups, and scan its function names for the verb. Read the brief of the best candidates before you look at anything else.
+</Check>
+
+<Check prompt="You call a PROS function and the motor doesn't move. The function's entry lists `ENODEV` under errno. What does that tell you to check?">
+`ENODEV` means the port can't be configured as the kind of device the function needs. Check that the port number in your code matches where the motor is plugged in, and that nothing else is using that port.
+</Check>
+
+<Check prompt="A friend says: I use a template for my autonomous, so I don't need to know control theory. Give two ways this goes wrong.">
+The template needs numbers tuned for your robot, and you can't tune what you don't understand. And when judges ask how your autonomous works, you'll have little to say. Other good answers: you can't use its advanced features or know its limits.
+</Check>
+
+<Check prompt="The entry says move_voltage takes the range -12000 to 12000. You want about a quarter of full power. What value do you pass?">
+3000. The unit is millivolts, so full power is 12000, and a quarter of that is 3000.
+</Check>

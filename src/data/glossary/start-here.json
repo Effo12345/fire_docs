@@ -34,5 +34,8 @@
   {"id": "syntax", "term": "syntax", "definition": "The grammar of a programming language: the exact rules for how code must be written.", "page": "start-here/what-code-does"},
   {"id": "compile-error", "term": "compile error", "definition": "A message from the compiler saying your code breaks the language's rules, so it can't produce a program.", "page": "start-here/what-code-does"},
   {"id": "bug", "term": "bug", "definition": "A mistake in a program that compiles fine but makes it do the wrong thing.", "page": "start-here/what-code-does"},
-  {"id": "debugging", "term": "debugging", "definition": "Finding and fixing bugs.", "page": "start-here/what-code-does"}
+  {"id": "debugging", "term": "debugging", "definition": "Finding and fixing bugs.", "page": "start-here/what-code-does"},
+  {"id": "api", "term": "API", "definition": "Application programming interface: the set of functions and classes a library offers for your code to use, along with the rules for using them. The PROS API is every function PROS lets you call.", "page": "start-here/how-to-use-this-guide"},
+  {"id": "reference-docs", "term": "reference documentation", "definition": "Documentation that lists every piece of something completely and tersely, to be looked things up in, as opposed to a tutorial that teaches an idea in order.", "page": "start-here/how-to-use-this-guide"},
+  {"id": "errno", "term": "errno", "definition": "A standard C and C++ variable where a failed call leaves a number saying what went wrong. PROS functions that fail return PROS_ERR and set it.", "page": "start-here/how-to-use-this-guide"}
 ]
