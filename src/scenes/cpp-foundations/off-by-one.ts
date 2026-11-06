@@ -20,7 +20,7 @@ for(int i = 0; i <= 3; i++) {
         { line: 4, vars: { i: 2 }, note: '2 is less than or equal to 3.' },
         { line: 5, vars: { total: 230 }, note: 'All three elements are added, and 230 is already the right answer.' },
         { line: 4, vars: { i: 3 }, note: 'Is 3 less than or equal to 3? Yes. The loop runs a fourth time.' },
-        { line: 5, vars: { 'speeds[3]': '?', total: '?' }, note: '<code>speeds[3]</code> is past the end. It is whatever bytes sit there, so <code>total</code> is now garbage.' },
+        { line: 5, vars: { 'speeds[3]': '?', total: '?' }, wrong: ['speeds[3]', 'total'], note: '<code>speeds[3]</code> is past the end. It is whatever bytes sit there, so <code>total</code> is now garbage.' },
         { line: 4, vars: { i: 4 }, note: 'Nothing complained. Now 4 is not less than or equal to 3, and the loop ends with a wrong total.' },
     ],
 });

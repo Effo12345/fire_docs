@@ -6,6 +6,7 @@ import { color } from './palette';
 export interface CodeStep {
     line: number; // 1-indexed line of code being run
     vars?: Record<string, string | number>; // Variables that change on this step
+    wrong?: string[]; // Variables drawn in the error color until they next change
     out?: string; // Text this step prints
     note?: string; // One sentence on what just happened
 }
@@ -47,6 +48,13 @@ export const defineCodeScene = (o: CodeSceneOptions): SceneDef => {
     // Work out the full state after each step ahead of time
     const states: Record<string, string | number>[] = [];
     const outputs: string[] = [];
+    const wrongAt: Set<string>[] = [];
+    o.steps.forEach((step, i) => {
+        const wrong = new Set(wrongAt[i - 1]);
+        for (const name of Object.keys(step.vars ?? {})) wrong.delete(name);
+        for (const name of step.wrong ?? []) wrong.add(name);
+        wrongAt.push(wrong);
+    });
     o.steps.reduce<[Record<string, string | number>, string]>(([vars, out], step) => {
         const nextVars = { ...vars, ...step.vars };
         const nextOut = out + (step.out ?? '');
@@ -114,6 +122,7 @@ export const defineCodeScene = (o: CodeSceneOptions): SceneDef => {
                 for (const { name, box, value } of boxes) {
                     const changed = step.vars && name in step.vars;
                     value.text(name in vars ? vars[name] : '');
+                    value.set({ fill: wrongAt[index].has(name) ? color.error : color.value });
                     box.set({ stroke: changed && within < 1 ? color.focus : color.dim, 'stroke-width': changed && within < 1 ? 2 : 1.25 });
                 }
                 outText?.text(outputs[index]);
