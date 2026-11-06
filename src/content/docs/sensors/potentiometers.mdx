@@ -1,5 +1,113 @@
 ---
-title: "Potentiometers"
+title: Potentiometers
+description: How a potentiometer turns an angle into a voltage and then into a number, how to read one on an ADI port, and how to turn that number into degrees of arm travel.
 ---
+import Scene from '../../../components/Scene.astro';
+import Api from '../../../components/Api.astro';
+import Check from '../../../components/Check.astro';
+import ReadTheDocs from '../../../components/ReadTheDocs.astro';
+import Term from '../../../components/Term.astro';
+import T from '../../../components/T.astro';
+import Hl from '../../../components/Hl.astro';
 
-This page is being written.
+[Rotation Sensors and Shaft Encoders](../rotation-and-shaft-encoders/) measure shafts that can spin forever, so they have to count turns. The robot's arm doesn't do that. It swings up and down through a fraction of one turn, and it never needs a count. For a motion like that, the running robot has `armPot` on ADI port B, and it's an <T id="absolute-sensor">absolute</T> sensor with nothing to count: the angle is in the signal itself.
+
+A <Term id="potentiometer">potentiometer</Term> is a resistor with a sliding contact that rides along it, and the shaft moves the contact. It works by a bit of electrical geometry that fits in one scene.
+
+## A resistor you can tap anywhere
+
+Connect about 5 <T id="voltage">volts</T> to one end of a resistor and ground (0 V) to the other. The voltage then falls steadily along the resistor, the way height falls along a straight ramp. Halfway along, it's about half. The sliding contact, called the wiper, picks off whatever voltage sits at its position and sends it down a wire. The wiper splits the resistor into two parts in series, and that arrangement is called a <Term id="voltage-divider">voltage divider</Term>: the tap's voltage depends only on how the total splits between the two parts. Turn the shaft and the split changes, so the voltage changes too. The voltage is proportional to the angle.
+
+<Scene name="sensors/voltage-divider">
+Slide the shaft angle and watch the <Hl c="focus">contact</Hl> move along the resistor. The <Hl c="value">voltage</Hl> at the tap rises with it, and the bar on the right shows the count the port reports. Push the angle past 250 and the original part stops at its limit. Then switch to the V2, which keeps going to 330. Compare the one-count step at the two extremes.
+</Scene>
+
+## From voltage to a number
+
+The Brain can't use "about 2.6 V" directly. An <Term id="adc">ADC</Term>, an analog-to-digital converter, measures the voltage and answers with a whole number. The ADI ports use 12 bits, which gives $2^{12} = 4096$ possible answers, 0 for about 0 V up to 4095 for about 5 V. That's the stepping [Why Sensors](../why-sensors/#what-a-sensor-reading-really-is) described, and here it has a size you can work out. The original potentiometer turns up to 250 degrees, so one count is
+
+$$
+\frac{250}{4095} \approx 0.061 \text{ degrees}
+$$
+
+and the V2, which turns 330 degrees, steps by $330 / 4095 \approx 0.081$ degrees. That's the <T id="resolution">resolution</T> in the ideal case. Real readings are noisier than one count, and PROS's own ADI tutorial says real sensors may read closer to 5 and 4090 than to 0 and 4095. So don't trust the extreme ends of the scale or the third decimal of an angle. Hold the arm still and print the value: how far it wanders is your real resolution.
+
+## `pros::adi::Potentiometer`
+
+The robot's object is declared with a port and nothing else:
+
+```cpp
+pros::adi::Potentiometer armPot('B');
+```
+
+The constructor <Api sym="adi/Potentiometer" /> takes a second argument, the part's type, and it defaults to the original, `E_ADI_POT_EDR`. If your part is the V2, change that one line instead of adding another:
+
+```cpp nocheck
+// Replaces the armPot line above. Keep only one object on port B.
+pros::adi::Potentiometer armPot('B', pros::E_ADI_POT_V2);
+```
+
+The type changes nothing about the wiring or the count. It only sets the number the count is scaled by, 250 or 330, so the wrong type gives a wrong angle but a correct <Api sym="adi/get_value" />.
+
+Two functions read it. `get_value()` returns the raw count, 0 to 4095. <Api sym="adi/get_angle" /> returns the shaft angle, from 0 up to the part's travel.
+
+```cpp
+void opcontrol() {
+    while(true) {
+        pros::lcd::print(0, "count: %d", armPot.get_value());
+        pros::lcd::print(1, "angle: %.1f", armPot.get_angle());
+
+        pros::delay(10);
+    }
+}
+```
+
+`get_angle()` returns degrees. The header comment contradicts itself: one line says "tenths of a degree" and the return description says "in degrees". The PROS kernel source scales the count as `value * 250 / 4095.0` (or 330 for the V2), which is plain degrees, and the scene follows that. This page didn't run it on a real part, so test it yourself: turn the shaft to its end and check that `get_angle()` reads about 250 or 330, not 2500.
+
+## From shaft angle to arm angle
+
+The potentiometer reports its own shaft's angle, measured from the end of its travel. That isn't the arm's angle. If gears sit between the arm and the pot, the pot turns by a different amount, and even a direct mount doesn't put the pot's zero at the arm's floor position. The fix needs two measurements and no theory about the mounting. Move the arm by hand to its lowest and highest positions and print `get_value()` at each. Measure how far the arm really swung, with a protractor or a phone level. Then map the count linearly.
+
+```cpp
+// Replace these with readings from your own arm
+const int ARM_DOWN_COUNT = 800;
+const int ARM_UP_COUNT = 2900;
+const double ARM_SWING_DEGREES = 95.0;
+
+double getArmDegrees() {
+    double span = ARM_UP_COUNT - ARM_DOWN_COUNT;
+    double fraction = (armPot.get_value() - ARM_DOWN_COUNT) / span;
+
+    return fraction * ARM_SWING_DEGREES;
+}
+```
+
+The three constants are made up. `span` is a `double` on purpose: if the top and bottom were both ints, the division would be [integer division](../../cpp-foundations/math-and-decisions/#the-integer-division-surprise) and give 0 for every position short of the top. A reading outside the range just extrapolates, so 20 counts below `ARM_DOWN_COUNT` gives about -0.9 degrees, which is fair to see.
+
+Doing this once and writing the numbers into the code is a <T id="calibration">calibration</T>. PROS has a built-in version of the idea.
+
+<ReadTheDocs>
+Open the ADI group in the PROS C++ API and look at the Potentiometer class. Find the function that stores a reference reading, and the one that reads relative to it. What does the first one assume about the shaft while it runs?
+</ReadTheDocs>
+
+<Check prompt="What did you find, and what goes wrong if you run it at the wrong moment?">
+<Api sym="adi/calibrate" /> averages about 500 readings taken 1 ms apart, over half a second, and stores the result. <Api sym="adi/get_value_calibrated" /> then returns the current count minus the stored one. The header says to call it only when the potentiometer isn't rotating. If the arm isn't at the same place every time it runs, the "zero" lands somewhere different on each run, so it only helps when a start position is guaranteed, like an arm resting on its stop at power on.
+</Check>
+
+## Limits
+
+The original potentiometer has hard stops at the ends of its travel, and the [BLRS wiki](https://wiki.purduesigbots.com/vex-electronics/vex-sensors/3-pin-adi-sensors/potentiometer) warns that turning it past them can break it. Build the arm's mechanical stops to engage before the potentiometer's own, so that at both of the arm's stops the reading is still away from 0 and 4095.
+
+The V2 turns continuously, but its resistor can't cover the whole circle, so somewhere in each turn there should be a <Term id="dead-zone">dead zone</Term>: a stretch where the output isn't a useful angle. That's an inference from how it is built, and no published size for the gap turned up, so the scene doesn't draw one. Measure yours: turn the shaft slowly through a full turn and print `get_value()`. A flat stretch or a sudden jump marks the gap. Mount the part so the arm's whole swing stays well away from it.
+
+A potentiometer is the wrong tool for a mechanism that spins continuously, like a wheel, because its travel is under one turn. It also gives no velocity unless you compute it, and the ADI port refreshes only every 10 ms (the header says so). For an arm that swings through a small arc, though, it gives an angle with no counting, no reset and no homing.
+
+Every sensor so far measures something that turns. The robot also needs to know which way it faces, and no shaft says so. That is the [inertial sensor](../inertial-sensor/).
+
+<Check prompt="An arm's count is 800 at the bottom and 2900 at the top, and it swings 95 degrees. The potentiometer reads 1850. What is the arm angle? And if the part is an original (250 degrees over 4095 counts), is one count of arm angle finer or coarser than one count of the part itself?">
+The span is 2900 - 800 = 2100 counts, and 1850 is 1050 above the bottom, exactly halfway, so the arm is at 47.5 degrees. One count of arm angle is 95 / 2100, about 0.045 degrees, which is finer than the 0.061 degrees per count of the part. That means the pot turns more than the arm: 2100 counts is about 128 degrees of pot, for 95 degrees of arm. That is the ideal; noise adds to it.
+</Check>
+
+<Check prompt="A teammate replaces an original potentiometer with a V2 and leaves the code alone. The shaft sweeps its whole 330 degrees. What do get_value() and get_angle() report at the end?">
+`get_value()` still climbs to about 4095, since the count is just the voltage. `get_angle()` is still scaled by 250, so it tops out near 250 instead of 330, and every angle in between reads about 24 percent low (250 / 330 is 0.76). The fix is to pass `pros::E_ADI_POT_V2` to the constructor.
+</Check>
