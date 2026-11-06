@@ -1,0 +1,170 @@
+/* Blackboard theme. Near-black, serif, thin lines. Color carries meaning, so it's used sparingly. */
+:root,
+::backdrop {
+    /* Meaning colors, shared by prose, math and animations */
+    --fd-value: #58C4DD;
+    --fd-focus: #F4D35E;
+    --fd-target: #83C167;
+    --fd-error: #E8716B;
+
+    --fd-bg: #111418;
+    --fd-bg-deep: #0E1114;
+    --fd-bg-code: #0C0F12;
+    --fd-ink: #E6E4DD;
+    --fd-ink-dim: #A9ABA8;
+    --fd-ink-faint: #7F8589;
+    --fd-rule: #33393F;
+
+    --sl-font: 'Source Serif 4 Variable', Georgia, 'Times New Roman', serif;
+    --sl-font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+    --sl-color-white: var(--fd-ink);
+    --sl-color-gray-1: var(--fd-ink);
+    --sl-color-gray-2: #CFCEC8;
+    --sl-color-gray-3: var(--fd-ink-dim);
+    --sl-color-gray-4: var(--fd-ink-faint);
+    --sl-color-gray-5: var(--fd-rule);
+    --sl-color-gray-6: #1A1E23;
+    --sl-color-black: var(--fd-bg);
+
+    --sl-color-accent-low: #17333B;
+    --sl-color-accent: var(--fd-value);
+    --sl-color-accent-high: var(--fd-value);
+
+    --sl-color-text: #DBD9D2;
+    --sl-color-text-accent: var(--fd-value);
+    --sl-color-text-invert: var(--fd-bg);
+    --sl-color-bg: var(--fd-bg);
+    --sl-color-bg-nav: var(--fd-bg-deep);
+    --sl-color-bg-sidebar: var(--fd-bg-deep);
+    --sl-color-bg-inline-code: #1F242A;
+    --sl-color-hairline-light: var(--fd-rule);
+    --sl-color-hairline: var(--fd-rule);
+    --sl-color-hairline-shade: var(--fd-rule);
+
+    --sl-shadow-sm: none;
+    --sl-shadow-md: none;
+    --sl-shadow-lg: none;
+
+    --sl-text-body: 1.1875rem;
+    --sl-text-code: 0.86em;
+    --sl-text-h1: 2.5rem;
+    --sl-text-h2: 1.625rem;
+    --sl-text-h3: 1.3rem;
+    --sl-text-h4: 1.1875rem;
+    --sl-line-height: 1.62;
+    --sl-content-width: 47rem;
+    --sl-sidebar-width: 18.5rem;
+}
+
+html { -webkit-font-smoothing: antialiased; }
+
+/* Headings */
+.sl-markdown-content :is(h1, h2, h3, h4),
+h1#_top {
+    font-weight: 600;
+    line-height: 1.2;
+    color: var(--fd-ink);
+}
+h1#_top { letter-spacing: 0; }
+.sl-markdown-content h2 { margin-top: 2.4em; }
+.sl-markdown-content h3 { margin-top: 1.8em; }
+
+.content-panel { border-top: none; }
+.content-panel + .content-panel { border-top: none; }
+
+/* Links */
+.sl-markdown-content a:not(.sl-anchor-link) {
+    color: var(--fd-value);
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+}
+.sl-markdown-content a:not(.sl-anchor-link):hover { color: var(--fd-ink); }
+.sl-markdown-content :not(pre) > code {
+    font-size: 0.84em;
+    padding: 0.08em 0.32em;
+    border: none;
+}
+
+/* Sidebar */
+.sidebar-pane { border-inline-end: 1px solid var(--fd-rule); }
+.sidebar-content { --sl-text-sm: 0.95rem; }
+.sidebar-content a { color: var(--fd-ink-dim); }
+.sidebar-content .large { font-size: 0.98rem; font-weight: 400; color: var(--fd-ink); }
+.sidebar-content a:hover { color: var(--fd-ink); }
+.sidebar-content a[aria-current='page'],
+.sidebar-content a[aria-current='page']:hover,
+.sidebar-content a[aria-current='page']:focus {
+    background: none;
+    color: var(--fd-value);
+    font-weight: 400;
+    box-shadow: inset 2px 0 0 var(--fd-value);
+    border-radius: 0;
+}
+.sidebar-content a[aria-current='page'] span { font-weight: 400; }
+.sidebar-content ul ul { border-inline-start: none; }
+.sidebar-content summary { border-radius: 0; }
+
+/* Header */
+header.header { border-bottom: 1px solid var(--fd-rule); }
+.social-icons::after { display: none; }
+.site-title { font-weight: 600; font-size: 1.15rem; color: var(--fd-ink); }
+site-search button { border-radius: 0; box-shadow: none; }
+
+/* Right-hand table of contents */
+starlight-toc a { color: var(--fd-ink-dim); }
+starlight-toc a[aria-current='true'] { color: var(--fd-value); }
+starlight-toc h2 { font-size: 0.85rem; font-weight: 400; color: var(--fd-ink-faint); }
+
+/* Previous / next */
+.pagination-links a {
+    border: none;
+    border-top: 1px solid var(--fd-rule);
+    border-radius: 0;
+    box-shadow: none;
+    padding: 1rem 0;
+    background: none;
+}
+.pagination-links a:hover { border-color: var(--fd-ink-dim); }
+.pagination-links .link-title { font-size: 1.15rem; color: var(--fd-ink); }
+
+/* Asides become a thin left rule, not a colored card */
+.starlight-aside {
+    background: none;
+    border: none;
+    border-inline-start: 2px solid var(--fd-rule);
+    padding: 0.1rem 0 0.1rem 1.1rem;
+}
+.starlight-aside__title {
+    font-size: 0.8rem;
+    font-weight: 400;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--fd-ink-dim);
+}
+.starlight-aside__icon { display: none; }
+.starlight-aside--caution { border-color: var(--fd-focus); }
+.starlight-aside--caution .starlight-aside__title { color: var(--fd-focus); }
+.starlight-aside--danger { border-color: var(--fd-error); }
+.starlight-aside--danger .starlight-aside__title { color: var(--fd-error); }
+
+/* Tables */
+.sl-markdown-content table { display: table; width: 100%; border-collapse: collapse; }
+.sl-markdown-content :is(th, td) { border: none; border-bottom: 1px solid var(--fd-rule); background: none; }
+.sl-markdown-content th { font-weight: 600; color: var(--fd-ink); }
+
+/* Code blocks */
+.expressive-code { margin-block: 1.4em; }
+.expressive-code .frame { box-shadow: none; }
+
+/* Meaning colors in prose and math */
+.fd-value { color: var(--fd-value); }
+.fd-focus { color: var(--fd-focus); }
+.fd-target { color: var(--fd-target); }
+.fd-error { color: var(--fd-error); }
+
+.katex { font-size: 1.05em; }
+.katex-display { margin: 1.5em 0; overflow-x: auto; overflow-y: hidden; }
+
+/* Keyboard focus */
+:focus-visible { outline: 2px solid var(--fd-value); outline-offset: 2px; }

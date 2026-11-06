@@ -1,0 +1,16 @@
+{
+  "name": "fire-blackboard",
+  "type": "dark",
+  "colors": {
+    "editor.background": "#0C0F12",
+    "editor.foreground": "#E6E4DD"
+  },
+  "tokenColors": [
+    { "scope": ["comment", "punctuation.definition.comment"], "settings": { "foreground": "#7F8589" } },
+    { "scope": ["keyword", "storage", "storage.type", "storage.modifier", "constant.language", "keyword.control", "support.type", "entity.name.type"], "settings": { "foreground": "#58C4DD" } },
+    { "scope": ["entity.name.function", "support.function", "meta.function-call", "variable.function"], "settings": { "foreground": "#F4D35E" } },
+    { "scope": ["constant.numeric", "string", "punctuation.definition.string", "constant.character"], "settings": { "foreground": "#83C167" } },
+    { "scope": ["keyword.control.directive", "meta.preprocessor", "punctuation.definition.directive"], "settings": { "foreground": "#A9ABA8" } },
+    { "scope": ["keyword.operator", "punctuation", "variable", "entity.name.scope-resolution"], "settings": { "foreground": "#E6E4DD" } }
+  ]
+}
