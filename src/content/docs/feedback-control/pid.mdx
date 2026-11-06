@@ -1,0 +1,146 @@
+---
+title: PID
+description: How the PID controller works, how to write one for your robot, and how to tune it.
+---
+import Scene from '../../../components/Scene.astro';
+import Api from '../../../components/Api.astro';
+import Check from '../../../components/Check.astro';
+import ReadTheDocs from '../../../components/ReadTheDocs.astro';
+import SourceCard from '../../../components/SourceCard.astro';
+import Hl from '../../../components/Hl.astro';
+
+In [Closing the Loop](../closing-the-loop/), the robot started checking its own position and correcting itself. The question left over is how hard it should push at each moment. PID is the most widely used answer in robotics, and it needs only one number to work with.
+
+## Start with the error
+
+Suppose the robot should stop at a <Hl c="target">target</Hl> 24 inches away. At any moment, subtracting its <Hl c="value">position</Hl> from the target gives the <Hl c="error">error</Hl>: how far it still has to go.
+
+$$
+\err{\text{error}} = \tar{\text{target}} - \val{\text{position}}
+$$
+
+The simplest useful idea is to push in proportion to that number. This is the **P**, for *proportional*:
+
+$$
+\foc{\text{output}} = k_P \times \err{\text{error}}
+$$
+
+Here $k_P$ is a number you choose, called a **gain**. Far from the target, the output is large. As the robot closes in, the output fades away by itself, with no special slow-down code. Press play, then drag $k_P$ and see how much of the robot's behavior comes from that one number.
+
+<Scene name="feedback-control/pid-response">
+Raise $k_P$ and the robot gets there faster, but sails further past the target. At a low $k_P$, it stops short and stays there. Leave $k_I$ and $k_D$ at zero for now.
+</Scene>
+
+P alone has two problems, and you can see both in the animation:
+
+- **It overshoots.** Pushing hard gets the robot moving fast, and it can't stop instantly. By the time the error reaches zero, it's still moving.
+- **It stops short.** Close to the target, the output is tiny. Once it's too small to overcome friction, the robot stops with some error left over, and nothing changes after that.
+
+The other two terms each fix one of these.
+
+## Three questions about the error
+
+The full controller adds up three terms, each looking at the error in a different way:
+
+$$
+\foc{\text{output}} = k_P \times \err{\text{error}} + k_I \times \text{(sum of error)} + k_D \times \text{(change in error)}
+$$
+
+If you haven't taken calculus, don't worry about the names *integral* and *derivative*. They have simple pictures, and the picture is all you need.
+
+<Scene name="feedback-control/pid-terms">
+The bars show how many volts each term asks for. Scrub to the moment the error is falling fastest and compare P with D.
+</Scene>
+
+### D: how fast is the error changing?
+
+The **derivative** is the slope of the error curve. When the robot rushes toward the target, the error is falling quickly, so the slope is steeply negative. Multiplied by $k_D$, that gives a negative output that pushes against the P term. D acts as a brake that gets stronger the faster the robot approaches.
+
+Go back to the first animation and raise $k_P$ until the robot overshoots badly. Now bring in $k_D$ and watch the overshoot shrink.
+
+### I: how long has the error been around?
+
+The **integral** is the area under the error curve so far. In code, it's just a running total: each time through the loop, add the current error to a variable. A small error that sticks around keeps adding up, so eventually this term gets big enough to push the robot the rest of the way.
+
+In the first animation, set a low $k_P$ so the robot stops short, then slowly raise $k_I$.
+
+The danger with I is that this total also grows while the robot is far away and already at full power, then has to be worked off after it arrives. That's called **integral windup**, and it's why the code below only adds to the total once the robot is close to the target.
+
+## In code
+
+Here's PID for driving straight, using the [`for` and `while` loops](../../cpp-foundations/arrays-and-loops/) and [functions](../../cpp-foundations/functions/) from C++ Foundations and the [motor groups](../../first-robot-program/inside-a-pros-project/) from your first robot program. `getDriveDistance()` comes from [Motor Encoders](../../sensors/motor-encoders/).
+
+```cpp
+// Drives straight until the robot has gone target inches
+void driveDistance(double target) {
+    // Output is in millivolts, so 400 here is 0.4 volts per inch
+    const double kP = 400.0;
+    const double kI = 50.0;
+    const double kD = 100.0;
+    const double loopSeconds = 0.01;
+
+    double errorSum = 0.0;
+    double lastError = target - getDriveDistance();
+
+    while(true) {
+        double error = target - getDriveDistance();
+
+        // Only build up the I term near the target, which limits windup
+        if(std::abs(error) < 6.0) {
+            errorSum += error * loopSeconds;
+        }
+
+        double errorChange = (error - lastError) / loopSeconds;
+        lastError = error;
+
+        double output = kP * error + kI * errorSum + kD * errorChange;
+        output = std::clamp(output, -12000.0, 12000.0);
+
+        leftDrive.move_voltage(output);
+        rightDrive.move_voltage(output);
+
+        // Close enough, and nearly stopped
+        if(std::abs(error) < 0.5 && std::abs(errorChange) < 1.0) {
+            break;
+        }
+
+        pros::delay(10);
+    }
+
+    leftDrive.move_voltage(0);
+    rightDrive.move_voltage(0);
+}
+```
+
+### Why `move_voltage`?
+
+PROS offers several ways to command a motor, and the choice matters here. <Api sym="motors/move_velocity" /> doesn't set the motor's power directly. You give it a speed, and a controller running inside the motor adjusts the power to hold that speed.
+
+Run your PID on top of that, and you have one controller commanding another. Each reacts to the other's corrections, so tuning becomes much harder. <Api sym="motors/move_voltage" /> applies the voltage you ask for, which leaves your controller in charge.
+
+<ReadTheDocs>
+Open <Api sym="motors/move_voltage" /> and <Api sym="motors/move_velocity" /> in the PROS API. What range of values does each accept, and what units are they in? Then look up [`std::clamp`](https://en.cppreference.com/w/cpp/algorithm/clamp) on cppreference, which every controller from here on uses.
+</ReadTheDocs>
+
+## Tuning
+
+**Tuning** means finding gains that work for your particular robot. These values depend on its weight, gearing, and wheels, so there's no way around testing them. Start with all three gains at zero, then:
+
+1. **Raise $k_P$** until the robot reaches the target quickly and overshoots by a little.
+2. **Raise $k_D$** until the overshoot is gone. If the robot starts to jitter or sound rough, $k_D$ is too high.
+3. **Raise $k_I$ only if you need to.** If the robot consistently stops a little short, add a small $k_I$.
+4. **Test at several distances.** A gain that's perfect for 24 inches might overshoot at 48. A short move and a long one will tell you much more than one move repeated.
+
+Change one gain at a time, and keep notes. A battery that's running low will change how the robot behaves, so don't tune on one.
+
+<SourceCard
+    title="An Introduction to PID Controllers"
+    author="George Gillard"
+    href="https://smithcsrobot.weebly.com/uploads/6/0/9/5/60954939/pid_control_document.pdf"
+>
+A short, well-known guide written for VEX teams. It's a good second explanation of everything on this page, with more detail on tuning.
+</SourceCard>
+
+<Check prompt="Your robot reaches the target, shoots past it, comes back, and shoots past it again. Which gain would you change first, and which way?">
+Raise $k_D$, because oscillating around the target means the robot arrives moving too fast and the brake isn't strong enough. Lowering $k_P$ also reduces overshoot, but it makes every move slower, so try $k_D$ first.
+</Check>

@@ -1,0 +1,43 @@
+---
+title: Inside a Computer
+description: What memory and a CPU are, and how the two work together to do everything a computer does.
+---
+import Scene from '../../../components/Scene.astro';
+import Check from '../../../components/Check.astro';
+
+Every robot you program in this guide is controlled by a computer called the V5 Brain. It doesn't look much like a laptop, but it works the same way, and the way it works is surprisingly simple. Nearly everything comes down to two parts: **memory**, which remembers numbers, and a **CPU**, which does things with them.
+
+Once you can picture those two parts, code stops being magic. Every line you write later in this guide is an instruction for moving numbers around between them.
+
+## Memory is a row of numbered boxes
+
+Picture a very long row of boxes. Each box holds one number. Each box also has its own permanent number, called its **address**, so that the computer can refer to it: "the box at address 2".
+
+Two things about these boxes matter for everything that follows:
+
+- A box always holds *something*. You can't empty it, only replace what's in it.
+- Reading a box doesn't change it. Writing to a box destroys what was there before.
+
+The V5 Brain has about 128 million of these boxes. That sounds like a lot, and for a robot it is.
+
+## The CPU does the work
+
+The **CPU** (Central Processing Unit) is the part that actually does things, but the list of things it can do is short. It can copy a number from memory, do basic arithmetic on numbers it's holding, compare two numbers, and copy a number back to memory.
+
+That's nearly the whole list. A CPU has no idea what a robot is. What makes it useful is speed: the V5 Brain's CPU performs hundreds of millions of these tiny steps every second.
+
+Here's what adding two numbers looks like from the CPU's point of view.
+
+<Scene name="start-here/memory-cycle">
+Drag the timeline back and forth. Notice that the numbers at addresses 2 and 5 stay put, because reading only makes a copy.
+</Scene>
+
+That cycle of reading, working, and writing back is the heartbeat of every computer. Playing a video, running a game, and steering a robot toward a goal are all built from enormous numbers of these small steps.
+
+## Why this matters for programming
+
+When you write code, you're telling the CPU which boxes to read, what to do with their contents, and where to put the results. The next page shows [what that looks like](../what-code-does/).
+
+<Check prompt="A program writes the number 40 to a box that holds 7. Then it reads that box twice. What does each read give, and what's in the box afterward?">
+Both reads give 40, and the box still holds 40. Writing replaced the 7 for good, and reading never changes a box.
+</Check>
