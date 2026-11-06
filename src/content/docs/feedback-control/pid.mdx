@@ -8,24 +8,25 @@ import Check from '../../../components/Check.astro';
 import ReadTheDocs from '../../../components/ReadTheDocs.astro';
 import SourceCard from '../../../components/SourceCard.astro';
 import Hl from '../../../components/Hl.astro';
+import Term from '../../../components/Term.astro';
 
 In [Closing the Loop](../closing-the-loop/), the robot started checking its own position and correcting itself. The question left over is how hard it should push at each moment. PID is the most widely used answer in robotics, and it needs only one number to work with.
 
 ## Start with the error
 
-Suppose the robot should stop at a <Hl c="target">target</Hl> 24 inches away. At any moment, subtracting its <Hl c="value">position</Hl> from the target gives the <Hl c="error">error</Hl>: how far it still has to go.
+Suppose the robot should stop at a <Hl c="target">target</Hl> 24 inches away. Control engineers call the value you're aiming for the <Term id="setpoint">setpoint</Term>. At any moment, subtracting the robot's <Hl c="value">position</Hl> from the setpoint gives the <Term id="control-error"><Hl c="error">error</Hl></Term>: how far it still has to go.
 
 $$
 \err{\text{error}} = \tar{\text{target}} - \val{\text{position}}
 $$
 
-The simplest useful idea is to push in proportion to that number. This is the **P**, for *proportional*:
+The simplest useful idea is to push in proportion to that number. This is the <Term id="proportional-term">proportional term</Term>, the **P** in PID:
 
 $$
 \foc{\text{output}} = k_P \times \err{\text{error}}
 $$
 
-Here $k_P$ is a number you choose, called a **gain**. Far from the target, the output is large. As the robot closes in, the output fades away by itself, with no special slow-down code. Press play, then drag $k_P$ and see how much of the robot's behavior comes from that one number.
+Here $k_P$ is a number you choose, called a <Term id="gain">gain</Term>. Far from the target, the output is large. As the robot closes in, the output fades away by itself, with no special slow-down code. Press play, then drag $k_P$ and see how much of the robot's behavior comes from that one number.
 
 <Scene name="feedback-control/pid-response">
 Raise $k_P$ and the robot gets there faster, but sails further past the target. At a low $k_P$, it stops short and stays there. Leave $k_I$ and $k_D$ at zero for now.
@@ -33,8 +34,8 @@ Raise $k_P$ and the robot gets there faster, but sails further past the target. 
 
 P alone has two problems, and you can see both in the animation:
 
-- **It overshoots.** Pushing hard gets the robot moving fast, and it can't stop instantly. By the time the error reaches zero, it's still moving.
-- **It stops short.** Close to the target, the output is tiny. Once it's too small to overcome friction, the robot stops with some error left over, and nothing changes after that.
+- **It overshoots.** Pushing hard gets the robot moving fast, and it can't stop instantly. By the time the error reaches zero, it's still moving, so it goes past the setpoint. This is called <Term id="overshoot">overshoot</Term>, and at a high enough gain, it turns into <Term id="oscillation">oscillation</Term>, where the robot swings back and forth.
+- **It stops short.** Close to the target, the output is tiny. Once it's too small to overcome friction, the robot stops with some error left over, and nothing changes after that. The leftover is called <Term id="steady-state-error">steady-state error</Term>.
 
 The other two terms each fix one of these.
 
@@ -54,17 +55,17 @@ The bars show how many volts each term asks for. Scrub to the moment the error i
 
 ### D: how fast is the error changing?
 
-The **derivative** is the slope of the error curve. When the robot rushes toward the target, the error is falling quickly, so the slope is steeply negative. Multiplied by $k_D$, that gives a negative output that pushes against the P term. D acts as a brake that gets stronger the faster the robot approaches.
+The <Term id="derivative-term">derivative term</Term> uses the slope of the error curve. When the robot rushes toward the target, the error is falling quickly, so the slope is steeply negative. Multiplied by $k_D$, that gives a negative output that pushes against the P term. D acts as a brake that gets stronger the faster the robot approaches.
 
 Go back to the first animation and raise $k_P$ until the robot overshoots badly. Now bring in $k_D$ and watch the overshoot shrink.
 
 ### I: how long has the error been around?
 
-The **integral** is the area under the error curve so far. In code, it's just a running total: each time through the loop, add the current error to a variable. A small error that sticks around keeps adding up, so eventually this term gets big enough to push the robot the rest of the way.
+The <Term id="integral-term">integral term</Term> uses the area under the error curve so far. In code, it's just a running total: each time through the loop, add the current error to a variable. A small error that sticks around keeps adding up, so eventually this term gets big enough to push the robot the rest of the way.
 
 In the first animation, set a low $k_P$ so the robot stops short, then slowly raise $k_I$.
 
-The danger with I is that this total also grows while the robot is far away and already at full power, then has to be worked off after it arrives. That's called **integral windup**, and it's why the code below only adds to the total once the robot is close to the target.
+The danger with I is that this total also grows while the robot is far away and already at full power, then has to be worked off after it arrives. That's called <Term id="integral-windup">integral windup</Term>, and it's why the code below only adds to the total once the robot is close to the target.
 
 ## In code
 
@@ -112,6 +113,8 @@ void driveDistance(double target) {
 }
 ```
 
+The `std::clamp` line is there because motors have a limit. Ask for more than 12 volts and you'll still only get 12. That's called <Term id="saturation">saturation</Term>, and it's why a high $k_P$ doesn't make the robot any faster once it's at full power.
+
 ### Why `move_voltage`?
 
 PROS offers several ways to command a motor, and the choice matters here. <Api sym="motors/move_velocity" /> doesn't set the motor's power directly. You give it a speed, and a controller running inside the motor adjusts the power to hold that speed.
@@ -122,9 +125,19 @@ Run your PID on top of that, and you have one controller commanding another. Eac
 Open <Api sym="motors/move_voltage" /> and <Api sym="motors/move_velocity" /> in the PROS API. What range of values does each accept, and what units are they in? Then look up [`std::clamp`](https://en.cppreference.com/w/cpp/algorithm/clamp) on cppreference, which every controller from here on uses.
 </ReadTheDocs>
 
+## Reading a response
+
+To compare controllers, you need more than "that looked good". Engineers look at how a system reacts when its setpoint suddenly jumps, which is called a *step response*, and pull a few standard numbers out of it.
+
+<Scene name="feedback-control/response-anatomy">
+This is P control alone, with $k_P = 1$. Every controller you tune from now on can be judged by these same four numbers.
+</Scene>
+
+They pull against each other. A shorter <Term id="rise-time">rise time</Term> usually means more overshoot, and getting rid of overshoot usually means a longer rise. <Term id="settling-time">Settling time</Term> is often the number you care about most, since it tells you when the robot can safely start its next move. In the [SD card chapter](../../seeing-inside/sd-card-logging/), you'll learn to log real runs and measure them yourself.
+
 ## Tuning
 
-**Tuning** means finding gains that work for your particular robot. These values depend on its weight, gearing, and wheels, so there's no way around testing them. Start with all three gains at zero, then:
+<Term id="tuning">Tuning</Term> means finding gains that work for your particular robot. These values depend on its weight, gearing, and wheels, so there's no way around testing them. Start with all three gains at zero, then:
 
 1. **Raise $k_P$** until the robot reaches the target quickly and overshoots by a little.
 2. **Raise $k_D$** until the overshoot is gone. If the robot starts to jitter or sound rough, $k_D$ is too high.
@@ -132,6 +145,20 @@ Open <Api sym="motors/move_voltage" /> and <Api sym="motors/move_velocity" /> in
 4. **Test at several distances.** A gain that's perfect for 24 inches might overshoot at 48. A short move and a long one will tell you much more than one move repeated.
 
 Change one gain at a time, and keep notes. A battery that's running low will change how the robot behaves, so don't tune on one.
+
+## Going further
+
+PID has been refined for decades, and the version above is a starting point. Here's where it goes next. Experienced teams use all of these.
+
+**Exit conditions.** This loop ends when the robot is close and nearly stopped. Real code also adds a timeout, so that a robot pressed against a wall doesn't wait forever and throw away the rest of your autonomous.
+
+**Derivative kick.** If the setpoint jumps while a controller is running, the error jumps too, and the slope of that jump is enormous for one loop. This spike is called <Term id="derivative-kick">derivative kick</Term>. A common fix is to take the derivative of the measurement instead of the error, since the robot's position can't jump.
+
+**Noise.** The derivative multiplies small differences between readings, so it amplifies sensor noise. Teams often smooth it with a low-pass filter.
+
+**Feedforward.** PID only reacts once there's an error. <Term id="feedforward">Feedforward</Term> adds output that you already know you need, such as the voltage to hold an arm up against gravity. It reduces how hard the feedback has to work.
+
+**Turning.** The same controller can turn the robot. Replace distance with the heading from [the Inertial Sensor](../../sensors/inertial-sensor/), and send opposite outputs to each side. Turning will need its own gains.
 
 <SourceCard
     title="An Introduction to PID Controllers"
