@@ -10,7 +10,7 @@ type Name = typeof NAMES[number];
 const PLANS: Record<number, Partial<Record<Name, Seg[]>>> = {
     0: {
         initialize: [[0, 2]],
-        opcontrol: [[2, 23]],
+        opcontrol: [[2, 24]],
     },
     1: {
         initialize: [[0, 2]],
@@ -95,7 +95,7 @@ export default defineScene({
                     }
                     const end = Math.min(t, seg[1]);
                     bar.set({ x: X(seg[0]), width: X(end) - X(seg[0]) }).show(true);
-                    if(t < seg[1]) live = true;
+                    if(t < seg[1] || seg[1] === SPAN) live = true;
                 });
                 labels[i].set({ fill: live ? color.ink : color.dim });
                 if(live) running.push(name);
