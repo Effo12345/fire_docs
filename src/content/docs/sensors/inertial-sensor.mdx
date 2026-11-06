@@ -1,5 +1,212 @@
 ---
-title: "The Inertial Sensor"
+title: The Inertial Sensor
+description: How the V5 Inertial Sensor reports which way the robot faces, how to calibrate it, why heading wraps from 359 to 0, and why the number slowly drifts.
 ---
+import Scene from '../../../components/Scene.astro';
+import Api from '../../../components/Api.astro';
+import Check from '../../../components/Check.astro';
+import ReadTheDocs from '../../../components/ReadTheDocs.astro';
+import Term from '../../../components/Term.astro';
+import T from '../../../components/T.astro';
+import Hl from '../../../components/Hl.astro';
 
-This page is being written.
+Since the switches, every sensor in this section has measured a shaft: a motor's, a tracking wheel's, the arm's under the [potentiometer](../potentiometers/). But when the robot spins in place, no shaft says which way it now faces. The wheels turned, but wheels slip, and turning them tells you the angle only if you know the track width and the grip exactly. What you want is a sensor that feels the robot turning, whatever the wheels did.
+
+That's the <Term id="imu">IMU</Term>, short for inertial measurement unit. VEX calls its part the Inertial Sensor, and the running robot has one on port 8, named `imu`. The VEX spec sheet lists a three-axis accelerometer and a three-axis gyroscope inside it.
+
+## What a gyroscope and an accelerometer measure
+
+A <Term id="gyroscope">gyroscope</Term> measures how fast it's rotating, in degrees per second. It doesn't measure the angle. If the robot spins at a steady 90 degrees per second, the gyroscope reads 90, whichever way the robot happens to face.
+
+An <Term id="accelerometer">accelerometer</Term> measures acceleration, including the pull of gravity. Sitting still, it feels gravity pointing down, which is how a sensor can tell it's tipped. Driving into a wall, it feels the sudden stop.
+
+To get an angle out of a rate, the sensor adds up little slices. If the robot turned at 20 degrees per second for 0.1 seconds, it turned 20 x 0.1 = 2 degrees in that slice. Add the next slice, and the next. Math calls this adding-up **integration**, and calculus does it with infinitely thin slices. Here the slices just have a width, and you can watch why the width matters.
+
+<Scene name="sensors/adding-slices">
+The gray curve is how fast the robot turns. Each blue bar is one slice: its height is the turn rate at the start of the slice and its width is the slice's duration, so its area is the degrees turned in that time. Play it and watch the running sum, then drag the slice width down toward 0.05 s and watch the sum close in on the thin-slice answer.
+</Scene>
+
+Fat slices miss what happened inside each one. The sensor's slices are far thinner, so this error is small, but a slice error never reaches exactly zero. Keep this scene in mind for [drift](#drift).
+
+You don't write this sum yourself. The sensor does it and hands you the finished angle. You can still read the raw rate with <Api sym="imu/get_gyro_rate" /> and the raw acceleration with <Api sym="imu/get_accel" />, but most programs only need the angles below.
+
+## Calibrating
+
+Before the angles mean anything, the sensor has to establish its reference point, which is <T id="calibration">calibration</T>. In PROS, <Api sym="imu/reset" /> starts it. The header says it takes about 2 seconds, with a 3 second timeout. Keep the robot still while it runs: the sensor is working out what "not turning" feels like, and a bump in that window would plausibly put a wrong zero into every reading afterward. That's reasoning from what calibration is for, not a published spec, so test it on your own robot.
+
+The function takes a `blocking` flag that defaults to false:
+
+- `reset()` or `reset(false)` starts calibrating and returns right away, while the sensor is still busy.
+- `reset(true)` waits until calibration finishes, so it's a <T id="blocking-call">blocking call</T>.
+
+While the sensor calibrates, the header says its reading functions fail with `EAGAIN`. Start calibrating without waiting, read the heading on the next line, and you get an error value, not an angle. The right place for a blocking calibration is `initialize()`: nothing else runs until it returns, and 2 seconds fits inside the few seconds the template asks for ([When each function runs](../../first-robot-program/inside-a-pros-project/#when-each-function-runs) explains why).
+
+```cpp
+void initialize() {
+    pros::lcd::initialize();
+
+    // Keep the robot still. Waits about 2 seconds
+    imu.reset(true);
+}
+```
+
+The return value is 1 on success, or `PROS_ERR` with <T id="errno">`errno`</T> set, the pattern from [when the sensor isn't there](../why-sensors/#when-the-sensor-isnt-there). A sensor that isn't plugged in fails here, and everything after would run on error values.
+
+You can also leave `reset()` non-blocking, do other setup, and wait for <Api sym="imu/is_calibrating" /> to go false before `initialize()` ends. That helps when there's more setup to do. The blocking version is the simple one to start with.
+
+## Yaw, pitch and roll
+
+An object can turn three ways, and each has a name. <Term id="yaw">Yaw</Term> is turning about the vertical axis, like a robot spinning on the field. <Term id="pitch">Pitch</Term> tips the nose up or down, as on a ramp. <Term id="roll">Roll</Term> tips it onto one side.
+
+PROS has <Api sym="imu/get_yaw" />, <Api sym="imu/get_pitch" /> and <Api sym="imu/get_roll" />, each bounded between -180 and 180 degrees according to the headers. On a flat field, yaw is the one that says where you face. The headers don't say which direction yaw counts as positive, so check that before relying on it. The next section covers two functions that report that same turning more conveniently.
+
+## Heading versus rotation
+
+Two functions answer "which way am I facing", and they differ on purpose:
+
+- <Api sym="imu/get_heading" /> is bounded from 0 up to, but never reaching, 360. It's a compass: 0 is the direction the sensor's x-axis pointed when it calibrated (the header's wording), which is the robot's front only if the sensor is mounted that way. 90 is a quarter turn clockwise from there.
+- <Api sym="imu/get_rotation" /> is the total turned since the last reset, with no bounds. A turn and a quarter clockwise reads 450.
+
+<Term id="heading">Heading</Term> is the word for the direction the robot faces. Both count clockwise, seen from above, as positive. Turn the robot a little to the left, and rotation goes negative while heading, stuck in the range 0 to 360, reads something like 350.
+
+The header comment for `get_heading()` says both "bounded by [0,360)" and that counterclockwise turns are "represented with negative" values. A number in [0, 360) is never negative, so those can't both describe heading. The bound describes heading, and the negative-counterclockwise sentence fits `get_rotation()`. Check on your own robot: print both, then turn it left by hand. Rotation should go negative and heading should read just under 360.
+
+<Scene name="sensors/heading-vs-rotation">
+The robot spins clockwise, turns around and spins back. Play it and watch the <Hl c="value">heading</Hl> line: it climbs to 360, then drops to 0 and starts over, a jump on the chart. The <Hl c="focus">rotation</Hl> line never jumps. It passes through 0 into negative numbers on the way back. Drag the slider below 360 and see that heading no longer wraps going out.
+</Scene>
+
+Each fits a different job. Rotation is smooth, so it suits anything that adds, subtracts or averages angles. Heading suits comparing against a compass direction you chose, like "face 90".
+
+You can choose where zero is. <Api sym="imu/tare_heading" /> makes the current heading 0, <Api sym="imu/tare_rotation" /> does the same for rotation, and <Api sym="imu/set_heading" /> tells the sensor the robot started at some other heading, such as 90 if it begins the match a quarter turn from your reference direction.
+
+<ReadTheDocs>
+Open the Inertial Sensor group in the PROS API. Find the function that changes how often the sensor sends new data. What is the smallest value it accepts, and what does the header say about how fast values actually reach your code?
+</ReadTheDocs>
+
+<Check prompt="Which function did you find, and what does it say about the rate?">
+<Api sym="imu/set_data_rate" /> sets the refresh interval. The smallest allowed is 5 ms, in steps of 5 ms, and the default is 10 ms. The header also says values are copied to your code every 10 ms, so a faster setting can't make your loop see new numbers more often. It's the same pattern as the rotation sensor.
+</Check>
+
+## Wraparound and the shortest turn
+
+Heading's compass range has a catch: after 359.9 it jumps straight to 0. That jump is <Term id="wraparound">wraparound</Term>, and it breaks the most obvious way to write a turn.
+
+Say the robot faces 350 and you want it to face 10. The first thing anyone tries is
+
+```cpp nocheck
+double error = target - heading;  // 10 - 350 = -340
+```
+
+which says to turn 340 degrees counterclockwise. But 350 and 10 are only 20 degrees apart, across the 0 mark. Subtraction doesn't know the numbers loop back.
+
+The fix uses the fact that a whole extra circle changes nothing. Shift the error by 360 until it lands between -180 and 180. Any turn longer than half a circle has a shorter way around the other side.
+
+```cpp
+// Degrees to turn, from -180 to 180. Positive is clockwise
+double shortestTurn(double target, double current) {
+    double error = std::fmod(target - current, 360.0);
+
+    if(error > 180.0) {
+        error -= 360.0;
+    } else if(error < -180.0) {
+        error += 360.0;
+    }
+
+    return error;
+}
+```
+
+`std::fmod` is the remainder after division, for doubles. It keeps the sign of what went in, so a negative difference stays negative, and the two `if` branches finish the job. These cases are worth checking by hand:
+
+| Target | Current | Plain subtraction | `shortestTurn` |
+|---|---|---|---|
+| 10 | 350 | -340 | 20 |
+| 350 | 10 | 340 | -20 |
+| 0 | 359 | -359 | 1 |
+| 0 | 180 | -180 | -180 |
+| 180 | 0 | 180 | 180 |
+| 450 | 10 | 440 | 80 |
+
+Exactly 180 degrees away, both directions are the same length, so neither is right, and the function keeps whichever sign the plain difference had. A target of 0 from a heading of 359 is a 1 degree nudge, not 359 degrees the long way. The last row shows a target outside 0 to 360 still works.
+
+<Scene name="sensors/shortest-turn">
+Move the two sliders. The dashed <Hl c="error">red arc</Hl> is what plain subtraction asks for, and the thick <Hl c="target">green arc</Hl> is what `shortestTurn` asks for. Set the heading to 350 and the target to 10 first. Then put them exactly opposite, such as 0 and 180, and see which way the green arc goes. It keeps the sign of the plain difference, and swapping the two numbers swaps the direction.
+</Scene>
+
+Here's a turn routine that uses it. The sign of the error picks the direction: for a clockwise turn the left side drives forward and the right side backward. The robot's left motors have reversed ports, which PROS already accounts for, so a positive voltage on `leftDrive` or `rightDrive` drives that side forward.
+
+```cpp withprev
+void turnToHeading(double target) {
+    while(true) {
+        double heading = imu.get_heading();
+
+        // PROS_ERR_F is infinity, which means the read failed
+        if(std::isinf(heading)) {
+            break;
+        }
+
+        double error = shortestTurn(target, heading);
+
+        if(std::fabs(error) < 5.0) {
+            break;
+        }
+
+        int voltage = error > 0 ? 4000 : -4000;
+        leftDrive.move_voltage(voltage);
+        rightDrive.move_voltage(-voltage);
+
+        pros::delay(10);
+    }
+
+    leftDrive.move_voltage(0);
+    rightDrive.move_voltage(0);
+}
+```
+
+This is a blunt tool. It uses a fixed voltage and the robot coasts after the stop, so it can overshoot and chatter back and forth before it settles. It also has no time limit, so a robot that jams against something would keep pushing. The failure check matters too. A failed read returns `PROS_ERR_F`, which is infinity, and infinity through `shortestTurn` comes out as not-a-number, which no comparison ever calls "close enough". [PID](../../feedback-control/pid/) replaces the fixed voltage with one that shrinks as the error does, using this same error. [Units and Coordinate Frames](../../feedback-control/units-and-frames/#wrapping-angles) treats angle wrapping in general and introduces radians. Until then, everything here is in degrees.
+
+One more convention: the IMU counts clockwise as positive, while math class measures angles counterclockwise from the right-hand axis. Neither is wrong, but mixing them flips your turns, and [the same page](../../feedback-control/units-and-frames/) returns to this.
+
+## Drift
+
+Every thin slice carries a tiny error. A gyroscope that reads 0.1 degrees per second while the robot sits still is wrong by a hair at any instant, but add that hair up for 60 seconds and the heading is off by 6 degrees. That's <Term id="integration-drift">integration drift</Term>: a small error in a rate, added up over time, becomes a large error in the angle. It's one case of the general [drift](../why-sensors/#absolute-and-relative-drift-and-calibration) from Why Sensors.
+
+<Scene name="sensors/gyro-drift">
+The robot sits still for a minute, sped up. With no rate error and no noise, the heading stays flat. Raise the rate error and the added-up heading leans away at a steady slope. Raise the noise instead and it wanders back and forth. The slider numbers are made up for the picture. They are not the sensor's real errors.
+</Scene>
+
+The PROS headers give no drift figure for the V5 Inertial Sensor, so this page doesn't quote one. Measure your own. Set the robot still on a flat surface, run this, and read the screen after a minute:
+
+```cpp
+void opcontrol() {
+    imu.tare_rotation();
+
+    while(true) {
+        pros::lcd::print(0, "rotation: %.2f", imu.get_rotation());
+
+        pros::delay(10);
+    }
+}
+```
+
+Repeat it a few times, on different days if you can. If the number moves by much less than a degree in a minute, drift hardly matters over a match. If it moves by degrees, it does. Also note whether it looks like a steady slope (a rate error) or a wandering line (noise), as in the scene.
+
+Teams cope in a few ways. They calibrate carefully and keep the robot still until the match starts. They reset the heading when they know the answer, such as after squaring the robot against a field wall and calling `set_heading` with that wall's direction. And for longer paths they combine the gyroscope with other sensors, as [Why Wheel Odometry](../../localization/why-wheel-odometry/) explains.
+
+## Limits
+
+The BLRS wiki lists the sensor's limits as 4 g for the accelerometer (g is the pull of gravity) and 1000 degrees per second for the gyroscope. 1000 degrees per second is nearly three full turns a second. Whether your drivetrain can ever spin that fast is worth testing. If the real rate exceeds the limit, the sensor can't report it, so the added-up angle would come out too small.
+
+Everything on this page is about the robot itself: which way it faces and how it's tilted. Nothing here says what's in front of it. The [distance sensor](../distance-sensor/) is the first sensor that looks at the world outside.
+
+<Check prompt="A robot's heading reads 5 and the target is 355. Without running code, which way and how far should `shortestTurn(355, 5)` say to turn?">
+355 - 5 = 350, which is greater than 180, so subtract 360 to get -10. It says to turn 10 degrees counterclockwise, across the 0 mark, not 350 degrees clockwise.
+</Check>
+
+<Check prompt="The code calls `imu.reset()` at the end of `initialize()` with no argument, and `opcontrol` immediately prints `imu.get_heading()`. What does the screen likely show, and how do you fix it?">
+`reset()` is non-blocking by default, so `initialize()` returns while the sensor is still calibrating for about 2 seconds. Reads fail with `EAGAIN` meanwhile, so `get_heading()` returns `PROS_ERR_F`, which is infinity. Fix it with `imu.reset(true)`, or wait for `is_calibrating()` to be false before `initialize()` returns.
+</Check>
+
+<Check prompt="You leave the robot still for 60 seconds and `get_rotation()` goes from 0 to 3.0. If the error is a steady rate, what rate is that, and what would you expect after 5 minutes?">
+3.0 degrees over 60 seconds is 0.05 degrees per second. At a steady rate, 300 seconds gives about 15 degrees. If noise caused the 3.0 instead, there's no steady rate and a longer test would give a different number, which is why you measure more than once.
+</Check>
