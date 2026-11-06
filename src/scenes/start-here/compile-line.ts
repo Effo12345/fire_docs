@@ -16,7 +16,7 @@ export default defineScene({
         { at: 9.5, text: 'Second job: break the line into steps the CPU can do. Read two values, add them, write the answer. These are the four instructions from the last page.' },
         { at: 15.5, text: 'Last job: turn each instruction into a number, and put the numbers in memory. These are the real ones a compiler for this CPU wrote for this line. The ARM notation on the right is the same four steps, spelled the way ARM spells them.' },
         { at: 22.5, text: 'Now the CPU can run them. It loads 7, loads 5, adds, and stores 12 over the 2 that was in address 6.' },
-        { at: 27, text: 'One line of source code became four instructions and a change to one byte-sized box of memory. That change is all the line ever did.' },
+        { at: 27, text: 'One line of source code became four instructions and a change to one box of memory. That change is all the line ever did.' },
     ],
     build({ draw }) {
         const tl = timeline();

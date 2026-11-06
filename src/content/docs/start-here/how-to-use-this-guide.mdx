@@ -87,7 +87,7 @@ Open the [PROS API home](https://purduesigbots.github.io/pros-doxygen-docs/api.h
 
 Many teams don't write everything from scratch. They add a community-built package of code to their project, one that already does the harder jobs, like driving a measured distance, turning to an angle, tracking the robot's position or following a path. Two popular ones are [LemLib](https://lemlib.github.io/LemLib/) and [EZ-Template](https://ez-robotics.github.io/EZ-Template/). LemLib describes itself as an open-source PROS template that provides algorithms like Pure Pursuit and odometry, and EZ-Template describes itself as a library that gets a robot moving quickly. Both are well made and widely used, and using one is a reasonable choice.
 
-A word on the word. Here "template" means a code package that teams share. It's unrelated to two other things you'll meet later, a *C++ template* (a way of writing code that works for many types) and the *template* that PROS uses to start a new project. Those come up when they're needed.
+A word on the word. Here "template" means a code package that teams share. PROS uses the word the same way for any library packaged to add to a project, which [Installing PROS](../../first-robot-program/installing-pros/) covers. A *C++ template* is unrelated: it's a way of writing code that works for many types, and it comes up with [std::vector](../../bigger-programs/vector/).
 
 You should still learn what's inside, for three reasons. The first is **tuning**. A template doesn't know your robot. It asks you for numbers, and picking them takes an understanding of what they do. The second is **getting the most out of it**. Each template has features and settings that only make sense if you know the idea behind them, and the same understanding tells you what its limits are, and when to change something. The third is **explaining it**. Judged awards at VEX events are decided in part through interviews, according to the REC Foundation's [Guide to Judging](https://kb.roboticseducation.org/hc/en-us/articles/4788499711127), and "we used a library" is a much weaker answer than being able to say how your autonomous finds its way and why you set it up as you did.
 
@@ -107,7 +107,7 @@ Next is [Variables, Types, and Scope](../../cpp-foundations/variables-types-scop
 Name the noun and the verb, then go to the documentation for the noun's group, such as the page for motor groups, and scan its function names for the verb. Read the brief of the best candidates before you look at anything else.
 </Check>
 
-<Check prompt="You call a PROS function and the motor doesn't move. The function's entry lists `ENODEV` under errno. What does that tell you to check?">
+<Check prompt="You call a PROS function and the motor doesn't move. The function's entry lists ENODEV under errno. What does that tell you to check?">
 `ENODEV` means the port can't be configured as the kind of device the function needs. Check that the port number in your code matches where the motor is plugged in, and that nothing else is using that port.
 </Check>
 
