@@ -1,5 +1,249 @@
 ---
-title: "Motor Encoders"
+title: Motor Encoders
+description: How the sensor inside every V5 motor counts shaft turns, how to turn those counts into inches driven, and what that number can't know.
 ---
+import Scene from '../../../components/Scene.astro';
+import Api from '../../../components/Api.astro';
+import Check from '../../../components/Check.astro';
+import ReadTheDocs from '../../../components/ReadTheDocs.astro';
+import Term from '../../../components/Term.astro';
+import T from '../../../components/T.astro';
 
-This page is being written.
+A [limit switch](../limit-and-bump-switches/) tells you a mechanism has reached one place. It can't tell you how far anything went to get there, and for the drivetrain that is the question that matters. [The same timed program](../../first-robot-program/first-autonomous/#why-the-same-program-lands-in-different-places) lands in different places, so how far have the wheels actually gone?
+
+You already own a sensor that can answer it. Every V5 motor has one built in, and the robot's six drive motors have had theirs since the first program. This page reads it, turns its counts into inches, and ends with the two helper functions the rest of this guide leans on: `getDriveDistance()` and `resetDriveDistance()`.
+
+## The sensor inside every motor
+
+An <Term id="encoder">encoder</Term> is a sensor that measures how far a shaft has turned. The one built into a V5 motor is the <Term id="integrated-motor-encoder">integrated motor encoder</Term>, or IME. It sits inside the motor, so there is nothing to buy, wire or mount, and it reports to the Brain over the motor's own Smart Port.
+
+It doesn't count degrees. It counts <Term id="tick">ticks</Term>, the smallest step it can notice, and how many ticks fit in one full turn is its <Term id="ticks-per-revolution">ticks per revolution</Term>. That number depends on the <T id="cartridge">cartridge</T> in the motor, because the cartridge's gears sit between the motor and the shaft you attach things to:
+
+| Cartridge | Ticks per turn of the output shaft | Degrees per tick |
+|---|---|---|
+| Red, 36:1 | 1800 | 0.2 |
+| Green, 18:1 | 900 | 0.4 |
+| Blue, 6:1 | 300 | 1.2 |
+
+The tick counts are the figures in VEX's [V5 Motor Overview](https://kb.vex.com/hc/en-us/articles/360035591332-V5-Motor-Overview) article, so check them there. The degrees column is arithmetic: 360 divided by the ticks.
+
+The blue row is the one that matters here, because the running robot's drive motors are blue. One tick is 1.2 degrees, a coarse step. The <T id="resolution">resolution</T> of a sensor, from [Accuracy, precision and resolution](../why-sensors/#accuracy-precision-and-resolution), is the smallest change it can report, so a blue motor's encoder can't tell a quarter of a degree from nothing. Further down you'll see what that is in inches.
+
+This is a <T id="relative-sensor">relative sensor</T>. It counts change, so it has no idea where the shaft "really" is, only how far it has turned since it started counting. Your code decides where zero is, and `tare_position` below is how.
+
+## Reading it, and the traps around it
+
+Position comes from <Api sym="motors/get_position" />, and a motor group has the same function. Print both sides:
+
+```cpp
+void opcontrol() {
+    while(true) {
+        pros::lcd::print(0, "left: %.1f", leftDrive.get_position());
+        pros::lcd::print(1, "right: %.1f", rightDrive.get_position());
+
+        pros::delay(10);
+    }
+}
+```
+
+The format code is `%.1f` where [the first program](../../first-robot-program/inside-a-pros-project/#printing-a-value-to-the-brain-screen) used `%d`, because the value is a <T id="floating-point">floating-point</T> number. The `pros::delay(10)` is there for [the usual reason](../../first-robot-program/driver-control/#why-the-loop-has-a-delay). If a motor is unplugged, the function returns `PROS_ERR_F` instead of a position, and [the sensor that isn't there](../why-sensors/#when-the-sensor-isnt-there) is a case your code can check for.
+
+Run it with the robot on the floor and push it forward by hand. Four things here can quietly hand you wrong numbers, so push, watch, and check each one.
+
+### Which unit are the numbers in?
+
+<Api sym="motors/get_encoder_units" /> lists three choices: degrees, rotations, and counts (raw ticks). Which one you get depends on how the motor was set up, and the robot's objects don't say, as in `pros::MotorGroup leftDrive({-1, -2, -3}, pros::MotorGearset::blue)`.
+
+The constructor does have a third parameter for units. It defaults to `invalid`, and the header says an invalid value means *leave the setting alone*. The parameter's own description says the default is degrees. Those two statements disagree, so this guide doesn't depend on what an untouched motor reports. PROS's [motors tutorial](https://purduesigbots.github.io/pros-doxygen-docs/motors.html) says to set the gearset and units yourself first, and that is the habit to copy. Put it in `initialize`, with the other setup:
+
+```cpp
+void initialize() {
+    pros::lcd::initialize();
+
+    leftDrive.set_encoder_units_all(pros::MotorUnits::degrees);
+    rightDrive.set_encoder_units_all(pros::MotorUnits::degrees);
+}
+```
+
+<Api sym="motors/set_encoder_units_all" /> applies the unit to every motor in the group. Plain <Api sym="motors/set_encoder_units" /> would set only the first one, which is the next trap.
+
+### A group's `get_position()` reads one motor
+
+`leftDrive` stands for three motors, but `get_position()` returns one number. The function takes an *index* that defaults to 0, and 0 is the first motor in the list. So `leftDrive.get_position()` is the position of the motor on port 1, and ports 2 and 3 aren't asked. You can read the others by index, counting from zero. Put these three lines in the loop in place of the two prints:
+
+```cpp
+pros::lcd::print(0, "port 1: %.1f", leftDrive.get_position(0));
+pros::lcd::print(1, "port 2: %.1f", leftDrive.get_position(1));
+pros::lcd::print(2, "port 3: %.1f", leftDrive.get_position(2));
+```
+
+Push the robot forward. All three lines should climb together, because the three motors are geared to the same wheels and can't turn independently. If they drift apart, something in the drivetrain is slipping or loose.
+
+<ReadTheDocs>
+Open the motors group in the PROS API (<Api sym="motors" />). Find the function that returns the position of every motor in a group at once, and the function that sets every motor's position to zero. What does the first one return?
+</ReadTheDocs>
+
+<Check prompt="Which two functions did you find, and what does the first one return?">
+<Api sym="motors/get_position_all" /> returns the positions of all the motors in a `std::vector<double>`, a list holding one number per motor, and <Api sym="motors/tare_position_all" /> sets all of their positions to zero. Vectors are taught later, in [std::vector](../../bigger-programs/vector/).
+</Check>
+
+### `tare_position()` zeroes one motor
+
+To start counting from here, you zero the position with <Api sym="motors/tare_position" />, which declares the current shaft angle to be zero. It doesn't move anything. It changes only what the sensor calls where it is. This is the call a [homing routine](../limit-and-bump-switches/#finding-a-known-position) makes once a switch has been hit.
+
+It has the same index trap. On a group, `tare_position()` resets motor 0 only, and ports 2 and 3 keep their old counts. `tare_position_all()` resets them all.
+
+### Negative ports and direction
+
+The left side's ports are negative. As [the first program explained](../../first-robot-program/inside-a-pros-project/#what-a-negative-port-means), PROS reverses both the commands and the readings of a <T id="reversed-motor">reversed motor</T>. That is why `leftDrive.get_position()` goes *up* when the robot drives forward, even though those motors face the other way.
+
+## From motor degrees to inches
+
+The encoder says the motor shaft has turned 720 degrees. The robot wants to know how far it rolled. Between those two numbers are three links, and each one is a multiplication.
+
+<Scene name="sensors/gear-train">
+Drag the motor angle and follow the three links one at a time. With the robot's gearing (36 teeth on the motor, 48 on the wheel), drag until the wheel reaches the 48 in mark. Then change the tooth counts and see what the same motor angle does.
+</Scene>
+
+**Link 1: degrees to turns.** A full turn is 360 degrees, so divide by 360. The scene starts at 720 degrees, which is 2 turns.
+
+**Link 2: motor turns to wheel turns.** The motor doesn't turn the wheel directly. A gear with 36 teeth on the motor meshes with a gear with 48 teeth on the wheel, and meshed gears move together tooth by tooth. When the motor gear has advanced 36 teeth, the wheel gear has too, and 36 teeth is only 36/48 of the way around a 48-tooth gear. So the wheel makes 0.75 turns for each motor turn. That ratio, the motor gear's teeth over the wheel gear's teeth, is the <Term id="gear-ratio">gear ratio</Term>, written 36:48 or 0.75 on this robot. A ratio under 1 trades speed for pushing force: 600 RPM at the motor becomes 600 × 0.75 = 450 RPM at the wheel.
+
+This is a second gear ratio, separate from the cartridge's. The cartridge's 6:1 is already inside the motor, and the encoder's degrees are reported for the shaft that comes out of it. Only the gears you added come into this arithmetic.
+
+**Link 3: wheel turns to inches.** A wheel rolling without slipping lays down one <Term id="wheel-circumference">circumference</Term> of floor per turn, and the circumference of a circle is $\pi$ times its diameter. For the 3.25 in wheels:
+
+$$
+\pi \times 3.25 \text{ in} = 10.21 \text{ in per wheel turn}
+$$
+
+Chain the links:
+
+$$
+\text{inches} = \frac{\text{motor degrees}}{360} \times \frac{36}{48} \times \pi \times 3.25
+$$
+
+Put numbers on it. One motor turn rolls the robot 0.75 × 10.21 = 7.66 in. Divide that by 360 and you get **0.0213 in per motor degree**, which is 47.0 degrees per inch. To drive 48 inches, the motor has to turn 48 ÷ 0.0213, about 2257 degrees, or 6.27 turns. On a blue cartridge that is about 1880 ticks.
+
+The resolution from earlier is now a distance. One tick is 1.2 degrees, and 1.2 × 0.0213 is about 0.026 in. The encoder can't see a move smaller than that, which is plenty for crossing a field.
+
+As a check on the gearing, the wheel's top speed at 450 RPM is 450 × 10.21 ≈ 4595 in per minute, which is 76.6 in per second. That is with nothing loading the motors, so a real robot is slower.
+
+Nothing in the chain is special to this robot. For another one, write down the wheel diameter and the teeth on the motor and wheel gears. A wheel directly on the motor shaft has a ratio of 1, and a chain drive counts sprocket teeth where this page counts gear teeth.
+
+## The drive distance helpers
+
+Now you can write the two functions that turn all of this into something the rest of the program can call. They go in `main.cpp` below the robot's objects, and later pages call them without showing them again.
+
+```cpp
+const double DRIVE_WHEEL_DIAMETER = 3.25;  // inches
+const double DRIVE_GEAR_RATIO = 36.0 / 48.0;  // wheel turns per motor turn
+
+double getDriveDistance() {
+    double motorDegrees = (leftDrive.get_position() + rightDrive.get_position()) / 2.0;
+    double wheelRevolutions = motorDegrees / 360.0 * DRIVE_GEAR_RATIO;
+
+    return wheelRevolutions * M_PI * DRIVE_WHEEL_DIAMETER;
+}
+
+void resetDriveDistance() {
+    leftDrive.tare_position_all();
+    rightDrive.tare_position_all();
+}
+```
+
+The two constants hold the numbers you worked out, with their units in comments, so a change to the robot is a change in one place. `36.0 / 48.0` has decimal points on purpose: in C++, `36 / 48` is a whole-number division and comes out as 0. `M_PI` is $\pi$, and it comes with `<cmath>`.
+
+`getDriveDistance()` is the three links in order, after one step before them: it averages the two sides. When the robot drives straight, both sides turn the same amount. On a curve, the average is how far the middle of the robot went. Turning on the spot makes one side count up and the other count down, so the average is about zero, which is right, because the robot hasn't gone anywhere. So the number is distance traveled, and it says nothing about which way the robot faces.
+
+Each of the four traps shows up in these few lines:
+
+- `get_position()` reads **one motor per side**, on purpose. The three motors on a side drive the same wheels, so they should agree, and one is enough. If you want the average of all three, `get_position_all()` hands back the whole list, and you'd add it up with a loop once [vectors](../../bigger-programs/vector/) are covered.
+- `resetDriveDistance()` uses `tare_position_all()`. The helper reads only motor 0, so plain `tare_position()` would *appear* to work, but the other four motors would be left holding stale counts that bite the day someone reads them or averages the group.
+- The units have to be set in `initialize()`, as above. If they were rotations, the `/ 360.0` would be wrong and every distance would come out 360 times too small.
+- The signs work because of the negative ports. Driving forward counts up on both sides.
+
+The function reports inches since the last reset, so any move that depends on distance begins by calling `resetDriveDistance()`.
+
+## Driving until a distance
+
+Here are the helpers in use: drive forward until the wheels have measured a target distance.
+
+```cpp
+// Drives straight until the wheels have measured the target. It will overshoot
+void driveUntil(double inches) {
+    resetDriveDistance();
+
+    leftDrive.move_voltage(6000);
+    rightDrive.move_voltage(6000);
+
+    while(getDriveDistance() < inches) {
+        pros::delay(10);
+    }
+
+    leftDrive.brake();
+    rightDrive.brake();
+}
+
+void autonomous() {
+    driveUntil(24);
+
+    // Measured after everything has stopped moving
+    pros::delay(1000);
+    pros::lcd::print(0, "measured: %.2f in", getDriveDistance());
+}
+```
+
+Both sides get the same positive voltage, because the negative ports already took care of direction. Half of the 12000 millivolt maximum is a gentle speed for testing.
+
+The loop asks one question, "have I gone far enough?", and cuts the power the moment the answer is yes. A moving robot doesn't stop that moment. How far it carries on depends on its weight, its speed and the [brake mode](../../first-robot-program/inside-a-pros-project/#what-happens-when-you-stop), and there's no formula to give you here: it overshoots. There is a smaller overshoot too, because the loop only checks every 10 ms, and at the 76.6 in per second top speed from before the robot moves up to 0.77 in between checks.
+
+So measure yours. Run `autonomous()` above and compare the number on the screen with a tape measure and with 24. The screen number includes the coast, because the encoder kept counting as the wheels rolled to a stop. Slowing down before the target is a job for a [controller](../../feedback-control/pid/), which the next section is about. Until then this is honest, and a lot more repeatable than a timer.
+
+## What motor encoders can't see
+
+The encoder is inside the motor, so it measures the motor shaft's angle. Everything you computed after that, the gears, the wheel and the floor, is arithmetic that *assumes* those parts do what the ideal says. Each assumption can fail without the encoder noticing.
+
+**Wheel slip.** <Term id="wheel-slip">Wheel slip</Term> is a wheel turning without the robot moving the matching distance. It happens at a hard start, when the wheels break loose, and every time the robot pushes on something that won't move, like a wall or another robot. The motor turns, so the encoder counts, but the floor doesn't go by.
+
+<Scene name="sensors/slip-vs-measured">
+Press play. The dashed red line and red curve are where the encoder thinks the robot is, and the blue robot and curve are where it really is. With the wall on, watch how the gap grows once the robot reaches it. Then turn the wall off and lower the grip. Last, set the grip to 1 with no wall.
+</Scene>
+
+With the wall in the way, the true position stops at 30 in while the wheels keep turning until the motors are cut at 3 seconds, and the encoder ends up 30 in ahead. With no wall and the lowest grip, the gap is a few inches (about 4.6 in at the end of the drive), and with full grip and no wall it disappears. These come from a simplified model with made-up speeds and grip, so they show the idea and aren't figures for any real robot. How much yours slips is something to measure.
+
+**Backlash.** Real gears don't mesh perfectly. There's a small gap between the teeth, called <Term id="backlash">backlash</Term>, so when a motor changes direction it turns through the gap before the wheel moves at all. The encoder counts those degrees as distance. Chains and loose shafts add the same kind of slack. For a robot that only drives forward, backlash is a small fixed offset at the start of each move, and where the robot reverses often it shows up more. There's no standard figure for it, so measure it: turn a wheel by hand back and forth, and notice how far it travels before the motor shaft starts to move.
+
+**The wheel isn't exactly 3.25 inches.** An omni wheel's tread squashes under the robot's weight and wears over time, so the distance rolled per turn can differ a little from the label. The next section deals with that.
+
+**Which way it's facing.** As the averaging showed, nothing here says how the robot has turned. Heading comes from the [inertial sensor](../inertial-sensor/). Undriven [tracking wheels](../../localization/tracking-wheels/) exist for the slip and slop problems above.
+
+## Checking your numbers
+
+The calculation deserves a test on the real robot before any code depends on it. Measure 48 inches along the floor with a tape measure and mark both ends with tape. Run a program that calls `resetDriveDistance()` and then prints `getDriveDistance()` in a loop. With the robot's wheels on the start tape and the motors off, roll it by hand to the far mark.
+
+Rolling by hand removes power, slip and coast from the test, and it checks only the arithmetic: the gear ratio, the units and the wheel diameter. Whatever you read, the pattern says what went wrong:
+
+- **Close but not equal.** Say the screen reads 49.1 for a true 48. The wheel's effective diameter is a little smaller than 3.25. Scale it: 3.25 × 48 ÷ 49.1 = 3.18 in. (These numbers are made up, as an example.) Put the corrected value in `DRIVE_WHEEL_DIAMETER`.
+- **Off by a big factor.** A reading 360 times too small points at units set to rotations. A clean factor like 0.75 or 1.33 points at the gear ratio constant, and a factor of 2 or 3 is worth checking against the cartridge actually in the motor and the gearset in your code. How PROS uses the gearset isn't spelled out in the headers, so find the cause by changing one thing at a time.
+- **Counting down.** A sign is backwards, so one side's port number needs the opposite sign.
+
+Then run `driveUntil(48)` and compare with the tape. Whatever is left over is slip, coast and backlash.
+
+[Rotation Sensors and Shaft Encoders](../rotation-and-shaft-encoders/) takes the next step: an encoder on a shaft the motors don't drive, so none of this slip can reach it.
+
+<Check prompt="A team builds a robot with 4 inch wheels, nothing but the wheel on the motor shaft, and a green cartridge. How many inches does this page's formula report after the motors have turned 720 degrees?">
+The ratio is 1, since the wheel sits directly on the motor shaft. 720 degrees is 2 turns, and the wheel's circumference is $\pi \times 4 = 12.57$ in, so the robot has rolled 2 × 12.57 = 25.13 in. The constants would be `DRIVE_WHEEL_DIAMETER = 4.0` and `DRIVE_GEAR_RATIO = 1.0`. The green cartridge appears nowhere in the arithmetic, because the degrees are already reported for the shaft that comes out of it.
+</Check>
+
+<Check prompt="A teammate changes `resetDriveDistance()` to call `leftDrive.tare_position()` and `rightDrive.tare_position()`, and the distance still reads 0 after a reset. Is anything wrong?">
+It works today, because `getDriveDistance()` reads only motor 0 on each side and those are the two motors that got reset. The other four motors keep their old counts, though. Anything that reads motor 1 or 2, or averages the group, gets stale numbers that nothing in the program warns about. `tare_position_all()` costs nothing and removes that risk.
+</Check>
+
+<Check prompt="In `driveUntil(48)`, another robot blocks yours at the 30 inch mark and the wheels spin in place. What does `getDriveDistance()` read when the loop ends, and what is the weakness of the loop?">
+It reads about 48 in, because the wheels turned enough to roll that far on open floor, even though the robot is at 30 in. It counts wheel turns, not movement. A loop that waits on the encoder alone also has no way out if the wheels can't turn at all, so a real routine adds a time limit, like the timeout in the [homing routine](../limit-and-bump-switches/#finding-a-known-position), or a second sensor.
+</Check>
+
+<Check prompt="You forget the `/ 360.0` in `getDriveDistance()`. The robot rolls exactly one wheel turn. By what factor is the answer wrong, and in which direction?">
+The wheel makes 0.75 turns per motor turn, so one wheel turn takes 1 ÷ 0.75 = 1.333 motor turns, which is 480 motor degrees. The correct answer is 10.21 in. Without the division by 360, the formula multiplies the degrees by 0.75 × π × 3.25 and returns 480 × 7.66 ≈ 3676 in, which is 360 times too large. The error is that degrees were treated as if they were turns.
+</Check>
