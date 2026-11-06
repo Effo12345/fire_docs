@@ -40,6 +40,7 @@ export default defineConfig({
             components: {
                 ThemeSelect: './src/overrides/ThemeSelect.astro',
                 ThemeProvider: './src/overrides/ThemeProvider.astro',
+                TableOfContents: './src/overrides/TableOfContents.astro',
             },
             expressiveCode: {
                 themes: [codeTheme],

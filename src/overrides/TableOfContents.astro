@@ -1,0 +1,26 @@
+---
+import Default from '@astrojs/starlight/components/TableOfContents.astro';
+---
+<Default />
+
+<script>
+    // Fills the rail up to the section being read. Starlight marks that section's link.
+    for (const toc of document.querySelectorAll<HTMLElement>('.right-sidebar starlight-toc')) {
+        const list = toc.querySelector<HTMLElement>('nav > ul');
+        const links = [...toc.querySelectorAll<HTMLAnchorElement>('a')];
+        if(!list) continue;
+
+        const update = () => {
+            const current = links.findIndex((link) => link.getAttribute('aria-current') === 'true');
+            links.forEach((link, i) => link.classList.toggle('fd-passed', i < current));
+            if(current >= 0) {
+                const dot = links[current].getBoundingClientRect();
+                const top = list.getBoundingClientRect().top;
+                list.style.setProperty('--fd-toc-fill', `${Math.max(0, dot.top + 12 - top - 14)}px`);
+            }
+        };
+
+        new MutationObserver(update).observe(list, { subtree: true, attributes: true, attributeFilter: ['aria-current'] });
+        update();
+    }
+</script>
