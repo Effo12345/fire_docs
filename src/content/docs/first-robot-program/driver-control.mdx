@@ -1,5 +1,377 @@
 ---
 title: "Driver Control"
+description: How two sticks become six drive motors, why a robot loop waits 10 milliseconds, and the difference between a button being held and a button being pressed.
 ---
+import Scene from '../../../components/Scene.astro';
+import Api from '../../../components/Api.astro';
+import Check from '../../../components/Check.astro';
+import ReadTheDocs from '../../../components/ReadTheDocs.astro';
+import Hl from '../../../components/Hl.astro';
+import Term from '../../../components/Term.astro';
+import T from '../../../components/T.astro';
 
-This page is being written.
+[Inside a PROS Project](../inside-a-pros-project/) ended with an intake that runs from a button and drive motors that are created but never told to do anything. This page changes that. By the end, the sticks drive the robot, R1 toggles the intake, and you'll know why each line of that program is written the way it is.
+
+## Reading a stick
+
+Each stick on the controller has two directions, and each direction is its own number. One direction of a stick's travel is a <Term id="joystick-axis">joystick axis</Term>. You met <Api sym="misc/get_analog" /> already, and it takes the axis you want:
+
+```cpp
+int forward = master.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_Y);
+int turn = master.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_X);
+```
+
+The four axes are `E_CONTROLLER_ANALOG_LEFT_X`, `LEFT_Y`, `RIGHT_X` and `RIGHT_Y`. Each reads from -127 to 127, with 0 at rest. Up and right are positive. According to the header, a controller that isn't connected reads 0 on every axis, so a dropped link stops the drive instead of leaving it running.
+
+Notice that -127 to 127 is exactly the range `move` takes. A stick reading can go straight to a motor, with no conversion:
+
+```cpp
+leftDrive.move(master.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_Y));
+```
+
+Run that once and it does nothing useful, because it reads the stick once and moves on. The stick has to be read again a moment later, and again after that. That repeating is the subject of the next section.
+
+## Why the loop has a delay
+
+A program on the Brain can't ask the controller to tell it when a stick moves. It has to look. Asking over and over, on a schedule, whether something changed is called <Term id="polling">polling</Term>, and the code that does it is a <Term id="control-loop">control loop</Term>: read the inputs, decide, command the outputs, wait, repeat. You've written one already:
+
+```cpp
+while(true) {
+    // read, decide, command
+    pros::delay(10);
+}
+```
+
+The <Api sym="rtos/delay" /> at the bottom pauses this task for 10 milliseconds. Getting that number wrong in either direction breaks something different.
+
+**No delay at all.** The Brain's <T id="cpu">CPU</T> runs over a billion instructions per second, so a loop with nothing to wait for goes around an enormous number of times a second. Almost every pass reads the same stick value, since a thumb doesn't move that fast. The waste isn't the worst part. Your `opcontrol` is one <T id="task">task</T> among several, and the kernel shares the processor between them. The PROS [multitasking tutorial](https://pros.cs.purdue.edu/v5/tutorials/topical/multitasking.html) says tasks are interrupted every millisecond so another can run, that ready tasks of higher priority always win, and that a task which never delays or waits can starve the rest of the system of processor time. A `pros::delay` takes the task off the processor for that long, so others can use the time. [Doing Two Things at Once](../../seeing-inside/tasks/) draws how that works.
+
+**A delay that's too long.** Say the loop waits 100 milliseconds. A stick move can then sit unnoticed for up to a tenth of a second before the motors hear about it, and the robot feels like it's driving through mud. Worse for buttons: a tap shorter than the wait can go down and up between two looks, and the program never sees it. You'll watch that happen in a scene below.
+
+**Why 10 and not 1?** A faster loop only helps if the controller's numbers change that fast, and I couldn't find a documented figure for how often the stick values refresh, so don't take any number here as one. What the sources do say: the kernel's own loop that watches the competition state runs every 2 milliseconds (it's in `system_daemon.c`), and the PROS documentation examples use `pros::delay(2)`. The only controller timing limits in the header belong to the other direction, text and rumble sent *to* the controller, which are not applied faster than every 10 ms on a wired connection or every 50 ms over the radio. Reading faster than the data changes just gives you the same numbers again. At 10 ms you read 100 times a second, far more often than a hand moves a stick, and a press can't slip between two looks.
+
+There's also a reason that has nothing to do with the controller. Every loop in this guide waits 10 ms, so later math can say "this loop runs every 0.01 seconds" and mean it. The [PID page](../../feedback-control/pid/) does exactly that.
+
+One detail to know. <Api sym="rtos/delay" /> counts its 10 ms from the moment it's called, after the rest of your loop has already used some time. So the real period is 10 ms plus however long your code took. For a loop that must tick on a fixed schedule there is <Api sym="rtos/delay_until" />, which waits until a set time instead. Driving doesn't need that much precision, so this guide uses `delay`.
+
+<ReadTheDocs>
+Open <Api sym="rtos/delay" /> and read its description. What does it say the delay time is measured from, and what does it recommend for code that has to repeat at fixed intervals?
+</ReadTheDocs>
+
+## Tank drive
+
+The most direct way to drive is to give each stick one side of the robot. That's <Term id="tank-drive">tank drive</Term>, named for how a tank's tracks are steered: left track, right track.
+
+```cpp
+void opcontrol() {
+    while(true) {
+        int left = master.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_Y);
+        int right = master.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_Y);
+
+        leftDrive.move(left);
+        rightDrive.move(right);
+
+        pros::delay(10);
+    }
+}
+```
+
+Push both sticks forward and the robot goes straight, because the negative ports on `leftDrive` already made "positive" mean forward on both sides. Push them opposite ways and it spins in place. Push one and it swings around the other side.
+
+Spinning in place has a cost. Wheels on both sides point forward, so while the robot turns they're dragged sideways across the tile. This robot's 3.25 inch wheels are <Term id="omni-wheel">omni wheels</Term>: wheels with a ring of small rollers around the rim. A roller spins freely when pushed sideways, so the wheel grips going forward and gives way sideways, and the turn costs far less.
+
+Tank is easy to understand and easy to code. Its weakness is driving straight. Both thumbs have to push exactly the same amount, and that's harder than it sounds.
+
+## Arcade drive
+
+<Term id="arcade-drive">Arcade drive</Term> splits the job differently. One axis says how fast to go forward, and another says how much to turn. The left stick's up and down is forward, and the right stick's left and right is turn. Pushing the left stick alone drives perfectly straight, since both sides get the same number.
+
+The motors don't know about "forward" and "turn", so the program has to convert. Think about what a right turn is: the left side runs faster than the right. The robot's forward speed is how fast the sides go on average, and its turning is how different they are. So add the turn to one side and subtract it from the other:
+
+$$
+\val{\text{left}} = \text{forward} + \text{turn} \qquad \tar{\text{right}} = \text{forward} - \text{turn}
+$$
+
+With forward at 80 and turn at 30, left gets 110 and right gets 50. The average is still 80, and the gap of 60 is the turn. With forward at 0 and turn at 30, left gets 30 and right gets -30, and the robot spins in place, clockwise from above. That's a right turn, so a positive turn means right. The scene does this arithmetic as you drag. It opens in tank mode. Push each stick on its own and see which side moves. Then switch the first slider to arcade and see which axis of which stick counts now.
+
+<Scene name="first-robot-program/stick-mapping">
+Drag the <Hl c="focus">yellow dots</Hl>. The <Hl c="value">blue</Hl> line on each stick marks the axis the current mode reads. The bars are the commands for the left and right sides, and the <Hl c="target">green</Hl> dashed line is where the robot would drive over the next second.
+</Scene>
+
+The scene lets each axis reach 127 on its own. A real stick may not reach both extremes at once in a corner. Print the two axes with `pros::lcd::print` while you push a stick into a corner, and see what yours does.
+
+### When the sum is too big
+
+In arcade mode, push the left stick to 100 and the right to 60. Left becomes 160, which is 33 more than a motor can use. This is <T id="saturation">saturation</T>, the same thing as on the PID page: the formula asks for more than the hardware can give, and the output stops at its limit. In the scene, the <Hl c="error">red cap</Hl> on a bar appears when the formula asked for more than 127.
+
+You might think `leftDrive.move(forward + turn)` would be fine anyway. The documentation for <Api sym="motors/move" /> gives the range as -127 to 127 and says nothing about what happens outside it. In the kernel's source, `motor_move` currently cuts any value outside that range back to the nearest end, so today it would do the right thing. But the documentation doesn't promise it, as [Inside a PROS Project](../inside-a-pros-project/#two-ways-to-set-power) said, and a behavior that only happens to work is the kind of bug that appears after an update. So keep the value inside yourself, with the [`clamp` function you wrote](../../cpp-foundations/functions/#your-first-function):
+
+```cpp
+// The clamp from Functions: holds value between low and high
+int clamp(int value, int low, int high) {
+    if(value < low) {
+        return low;
+    }
+
+    if(value > high) {
+        return high;
+    }
+
+    return value;
+}
+
+void opcontrol() {
+    while(true) {
+        int forward = master.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_Y);
+        int turn = master.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_X);
+
+        leftDrive.move(clamp(forward + turn, -127, 127));
+        rightDrive.move(clamp(forward - turn, -127, 127));
+
+        pros::delay(10);
+    }
+}
+```
+
+That is safe, and it has a cost you can see in the scene. With the left stick at 100 and the right at 60, the formula asks for 160 and 40. Clamping cuts the left side to 127 and leaves the right at 40. The gap between the sides, which is the turn, shrank from 120 to 87. The faster you drive, the more of your turning gets thrown away.
+
+The fix is to shrink both sides by the same factor when either one is too big. The sides keep their ratio, so the robot follows the arc you asked for, just more slowly. The factor is 127 divided by the bigger of the two sizes. Flip the second slider in the scene between clamp and scale to compare.
+
+```cpp
+void opcontrol() {
+    while(true) {
+        int forward = master.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_Y);
+        int turn = master.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_X);
+
+        double left = forward + turn;
+        double right = forward - turn;
+
+        // Over 127 on either side: shrink both so their ratio survives
+        double biggest = std::max(std::abs(left), std::abs(right));
+        if(biggest > 127) {
+            left = left * 127 / biggest;
+            right = right * 127 / biggest;
+        }
+
+        leftDrive.move(left);
+        rightDrive.move(right);
+
+        pros::delay(10);
+    }
+}
+```
+
+For 160 and 40 the factor is 127 / 160, about 0.79, so the sides become 127 and about 32. The ratio is 4 to 1, as asked. Clamping gave 127 and 40, about 3 to 1, which is a wider turn than the driver asked for. Neither is wrong. Clamping puts forward speed first, and scaling puts the shape of the path first. Drivers disagree on which feels better, so try both on your robot. After scaling, no value can exceed 127, so `move` only ever gets numbers inside its documented range. Handing a `double` to `move` converts it to a whole number and drops the decimals, which is fine for a motor command.
+
+Some drivers prefer arcade on a single stick, with forward and turn both from the right stick. The math is identical, and only the two `get_analog` axes change.
+
+## Holding versus pressing
+
+Buttons look easier than sticks, and they hide a nastier problem. You already know <Api sym="misc/get_digital" />: it returns 1 for as long as a button is down, which is perfect for "run the intake while R1 is held". Now suppose you'd rather tap R1 to start the intake and tap again to stop it. That's a toggle: a variable remembers whether the intake is on, and a press flips it. The obvious code is:
+
+```cpp
+void opcontrol() {
+    bool intakeOn = false;
+
+    while(true) {
+        // Wrong: this flips on every pass while R1 is down
+        if(master.get_digital(pros::E_CONTROLLER_DIGITAL_R1)) {
+            intakeOn = !intakeOn;
+        }
+
+        if(intakeOn) {
+            intake.move(127);
+        } else {
+            intake.brake();
+        }
+
+        pros::delay(10);
+    }
+}
+```
+
+This is wrong in a way that hides itself. The loop runs every 10 ms, a finger stays on a button for much longer than that, and `get_digital` says 1 on every one of those passes. Each pass flips `intakeOn`. A tap of a tenth of a second flips it about ten times, and where it lands depends on whether the count was odd or even. Watch it happen. Each tick mark is one time around the loop. Play it, then change the hold time and see how the final state of the top bar changes.
+
+<Scene name="first-robot-program/press-timing">
+The upper intake bar toggles on <Hl c="value">get_digital</Hl>, and the lower one toggles on <Hl c="focus">get_digital_new_press</Hl>. With the delay at 10 and the press starting at 25, set the hold time to 105 and then to 115, and compare how the upper bar ends up. Then raise the loop delay to 100 and shorten the hold until the press falls between two ticks.
+</Scene>
+
+What the toggle needs is not "the button is down" but "the button just went down". The moment a signal changes from off to on is its <Term id="rising-edge">rising edge</Term>, and <Api sym="misc/get_digital_new_press" /> reports exactly that. Per its documentation, it returns 1 if the button is pressed and had not been pressed the last time the function was called, and 0 otherwise. In the kernel it works by keeping a flag for each button: the flag clears when the function sees the button up, and the first time it sees the button down, it sets the flag and returns true. So a held button gives one 1 and then zeros, until it's released and pressed again.
+
+```cpp
+void opcontrol() {
+    bool intakeOn = false;
+
+    while(true) {
+        if(master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_R1)) {
+            intakeOn = !intakeOn;
+        }
+
+        if(master.get_digital(pros::E_CONTROLLER_DIGITAL_R2)) {
+            intake.move(-127);
+        } else if(intakeOn) {
+            intake.move(127);
+        } else {
+            intake.brake();
+        }
+
+        pros::delay(10);
+    }
+}
+```
+
+R1 toggles the intake, and R2 reverses it for as long as it's held, with `get_digital` used where "held" is the right meaning. Declaring `intakeOn` inside `opcontrol` means it starts off again whenever the robot is disabled and enabled, since the function restarts from its first line, as the match timeline showed.
+
+Three facts about `get_digital_new_press` come from the header and the kernel, and each one causes a real bug.
+
+- **It uses up the press.** There is one flag per button, so you get one useful call per button per pass. A second call in the same pass returns 0 even though the button just went down. If two parts of your code need to know about the press, call it once and keep the answer in a variable: `bool r1Pressed = master.get_digital_new_press(...)`.
+- **It isn't thread-safe.** The header says only one task should call it for a given button, and the typical place is `opcontrol`. If two tasks check R1 with it, they get different answers depending on who asks first.
+- **It can only see what the loop sees.** This is polling, so a button that goes down and comes back up between two looks is never noticed. At 10 ms a deliberate press can't hide, but a long delay, or a slow call inside the loop, can miss it. The scene shows that with the delay slider.
+
+Mechanical switches can also make a few false on-off changes when they're pressed, like a ball bouncing before it settles. Ignoring changes for a short time after one is seen is called <Term id="debouncing">debouncing</Term>. I didn't find documentation saying whether the V5 controller filters this for you, so if a toggle ever fires twice on one press, a short lockout is the thing to try.
+
+There's a matching <Api sym="misc/get_digital_new_release" /> for the falling edge, the moment a button comes back up.
+
+<ReadTheDocs>
+Open <Api sym="misc/get_digital_new_press" /> and find the sentence about which tasks may call it. Then look at the list of buttons it accepts. Which names cover the four buttons on the right side of the controller?
+</ReadTheDocs>
+
+## Making the sticks feel right
+
+The program above drives the robot. Teams still spend time on three small changes between the stick and the motor, because they decide whether a robot feels precise.
+
+### Deadband
+
+A stick at rest should read 0, but a worn or dusty one may rest a few counts off. With the code above, the drive then creeps, or hums without moving, when nobody is touching it. The fix is a <Term id="deadband">deadband</Term>: a small zone around the center where the program treats the stick as exactly zero.
+
+If you only snap small values to 0, the output jumps from 0 to the deadband's size the moment you cross it. The nicer version stretches the remaining stick travel to fill what's left of the range, so output grows smoothly from 0.
+
+### Curves
+
+At full speed the robot covers about 76 inches a second (450 RPM at the wheels, 3.25 inch wheels), so a small nudge on the stick already moves it faster than precise positioning needs. A <Term id="joystick-curve">joystick curve</Term> reshapes the input so small stick movements give smaller outputs, and the top of the travel does the fast part. A common choice raises the stick, as a fraction of its full travel, to a power. A power of 1 is the straight line, and higher powers bend it. At a power of 2, half stick gives a quarter of full output, and full stick still gives full output. The scene draws both ideas together.
+
+<Scene name="first-robot-program/stick-curve">
+Slide the stick position and watch the yellow dot ride the curve. Widen the deadband and see the <Hl c="value">blue line</Hl> flatten at zero. Raise the curve exponent and see the middle sag. At exponent 1 with deadband 0, the line sits on the dashed one.
+</Scene>
+
+```cpp
+// Returns the shaped value for a stick reading
+double shape(int input, int deadband, double curve) {
+    int size = std::abs(input);
+    if(size <= deadband) {
+        return 0;
+    }
+
+    // 0 to 1 across the stick travel that's left after the deadband
+    double unit = (size - deadband) / (127.0 - deadband);
+    double output = 127 * std::pow(unit, curve);
+
+    return input < 0 ? -output : output;
+}
+```
+
+You'd call `shape` on `forward` and on `turn`, before the arcade math. With a curve the highest output is still 127, so the full range is intact and saturation behaves as before.
+
+The right numbers are a matter of feel. A motor needs some minimum command before the robot moves at all, because friction has to be overcome first, and where that point sits depends on the robot. So a deadband can also be tuned from the bottom: find the smallest command that moves your robot and start there.
+
+### Slew rate
+
+The last one is about change over time. If a driver slams the stick from 0 to 127, the drive is told to jump to full power in a single 10 ms step. The wheels can break loose and spin, the robot can lurch or tip, and the motors draw a surge of current. Limiting how quickly an output is allowed to change is a <Term id="slew-rate">slew rate</Term> limit. Each pass, the output moves toward the target by at most a fixed step:
+
+```cpp
+int clamp(int value, int low, int high);    // The one from Functions
+
+// Moves current toward target by at most step
+int slew(int current, int target, int step) {
+    return current + clamp(target - current, -step, step);
+}
+```
+
+Keep the last output in variables that live outside the loop, and feed each new command through it:
+
+```cpp
+int clamp(int value, int low, int high);
+int slew(int current, int target, int step);
+
+void opcontrol() {
+    int leftPower = 0;
+    int rightPower = 0;
+
+    while(true) {
+        int left = master.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_Y);
+        int right = master.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_Y);
+
+        leftPower = slew(leftPower, left, 12);
+        rightPower = slew(rightPower, right, 12);
+
+        leftDrive.move(leftPower);
+        rightDrive.move(rightPower);
+
+        pros::delay(10);
+    }
+}
+```
+
+A step of 12 per pass takes about 11 passes, a bit over a tenth of a second, to get from 0 to 127. That is long enough to protect the robot and short enough that a driver barely feels it. This is where the 10 ms matters again: the step is a change per loop, so a different delay changes what the 12 means.
+
+Why do strong teams care about all three? They make the robot do the same thing for the same stick motion, every time, and a robot that behaves consistently is one a driver can get good at. The same idea comes back in autonomous code, where a motor that ramps up gently is easier to predict than one that's slammed on.
+
+## Where this leaves the program
+
+The finished `opcontrol` combines what the page built: arcade drive that scales instead of clamping, plus the toggled intake.
+
+```cpp
+void opcontrol() {
+    bool intakeOn = false;
+
+    while(true) {
+        int forward = master.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_Y);
+        int turn = master.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_X);
+
+        double left = forward + turn;
+        double right = forward - turn;
+
+        // Over 127 on either side: shrink both so their ratio survives
+        double biggest = std::max(std::abs(left), std::abs(right));
+        if(biggest > 127) {
+            left = left * 127 / biggest;
+            right = right * 127 / biggest;
+        }
+
+        leftDrive.move(left);
+        rightDrive.move(right);
+
+        if(master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_R1)) {
+            intakeOn = !intakeOn;
+        }
+
+        if(master.get_digital(pros::E_CONTROLLER_DIGITAL_R2)) {
+            intake.move(-127);
+        } else if(intakeOn) {
+            intake.move(127);
+        } else {
+            intake.brake();
+        }
+
+        pros::delay(10);
+    }
+}
+```
+
+A driver watches the robot and fixes every mistake by eye, which is why this works. Take the driver away for the first 15 seconds of a match and the same robot has nobody to correct it. [Your First Autonomous](../first-autonomous/) is where you find out what that does.
+
+<Check prompt="The left stick reads 80 and the right stick reads -30. What do arcade drive's two sides get, and which way does the robot turn?">
+Left is 80 + (-30) = 50 and right is 80 - (-30) = 110. Neither is over 127, so nothing is cut off. The right side is faster, so the robot curves to the left.
+</Check>
+
+<Check prompt="Forward reads 127 and turn reads 64. Work out left and right after clamping, and after scaling. Which one keeps the robot on the arc you asked for?">
+The formula asks for 191 and 63. Clamping gives 127 and 63. Scaling multiplies both by 127 / 191, about 0.665, and gives 127 and about 42. The ratio of 191 to 63 is about 3, and 127 to 42 is also about 3, so scaling keeps the arc. Clamping makes the ratio 2, which is a wider turn than you asked for.
+</Check>
+
+<Check prompt="A toggle is written with get_digital and the loop waits 10 ms. A driver holds R1 for roughly 45 ms. Can you say whether the intake ends on or off?">
+No. About 4 or 5 passes see the button down, and which one depends on exactly when the press lands among the ticks. An even count leaves the intake where it started and an odd count flips it, so the result looks random. With `get_digital_new_press`, the answer is always exactly one flip.
+</Check>
+
+<Check prompt="Someone calls master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_R1) in opcontrol to run a toggle, and again inside a helper function to light up a display. The toggle sometimes doesn't respond. Why, and what's the fix?">
+The press is used up by whichever call runs first, so the other call gets 0 for that press. Call it once per pass, store the answer in a `bool`, and use that variable in both places.
+</Check>
