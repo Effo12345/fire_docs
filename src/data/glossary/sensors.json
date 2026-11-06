@@ -48,6 +48,8 @@
   {"id": "time-of-flight", "term": "time of flight", "definition": "Measuring distance by timing how long a pulse takes to reach something and come back.", "page": "sensors/distance-sensor"},
   {"id": "field-of-view", "term": "field of view", "definition": "The area a sensor can see.", "page": "sensors/distance-sensor"},
   {"id": "confidence-value", "term": "confidence value", "definition": "A number a sensor reports about how much to trust its reading.", "page": "sensors/distance-sensor"},
+  {"id": "sentinel-value", "term": "sentinel value", "definition": "A number reserved to mean something special, like 9999 meaning nothing was detected, instead of a real measurement.", "page": "sensors/distance-sensor"},
+  {"id": "median-filter", "term": "median filter", "definition": "Replacing each reading with the middle value of the last few, so one wild reading can't move the result.", "page": "sensors/distance-sensor"},
   {"id": "hue", "term": "hue", "definition": "A color given as an angle around a color wheel.", "page": "sensors/optical-sensor"},
   {"id": "saturation-color", "term": "saturation", "definition": "How strong a color is, from gray to vivid.", "page": "sensors/optical-sensor"},
   {"id": "proximity-sensor", "term": "proximity sensor", "definition": "A sensor that tells how close an object is, without measuring an exact distance.", "page": "sensors/optical-sensor"},

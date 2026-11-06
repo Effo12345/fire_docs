@@ -1,5 +1,301 @@
 ---
 title: "The Distance Sensor (Depth)"
+description: How the V5 Distance Sensor measures depth by timing a pulse of light, how accurate it is, what the 9999 reading means, and what a narrow beam can't tell you.
 ---
+import Scene from '../../../components/Scene.astro';
+import Api from '../../../components/Api.astro';
+import Check from '../../../components/Check.astro';
+import ReadTheDocs from '../../../components/ReadTheDocs.astro';
+import Term from '../../../components/Term.astro';
+import T from '../../../components/T.astro';
+import Hl from '../../../components/Hl.astro';
 
-This page is being written.
+Every sensor so far has reported on the robot itself: a motor's turns, an arm's angle, which way the robot faces. None of them can say whether a wall is in front of it. A distance sensor can. Some people call it a depth sensor, since it reports how deep the empty space ahead is, out to the first thing in the way. The running robot has one on port 11, named `frontDistance`.
+
+It also answers in a way the earlier sensors couldn't. "The wheels have rolled 24 inches" is a statement about the robot's history. "The wall is 300 mm away" is a statement about the field right now, and it stays true however the robot got there, slipping or not.
+
+## Timing a pulse of light
+
+The sensor shoots a short flash of laser light at whatever is ahead and waits for the reflection. VEX's spec sheet lists it as a Class 1 laser, the category that counts as safe in normal use, so it's fine around a classroom. The measuring trick is called <Term id="time-of-flight">time of flight</Term>: time the trip, and the distance follows.
+
+Work it out from what you already know. Speed is distance divided by time, so distance is speed times time. Light moves at 299,792,458 meters per second, which is about 300 millimeters in every **nanosecond**, a billionth of a second. But the flash goes to the object and comes back, so the clock runs over a path twice as long as the distance you want. Halve the result:
+
+$$d = \frac{c \times t}{2}$$
+
+where $c$ is the speed of light and $t$ is the round-trip time. A wall 200 mm away makes a 400 mm path, which takes 400 / 300 = 1.33 ns. A wall at 2000 mm takes 13.3 ns, and that's the longest trip the sensor is rated for.
+
+<Scene name="sensors/time-of-flight">
+Real light would be gone in a blink, so this is slowed down about 300 million times: 1 mm of light travel takes 1 ms on screen. Watch the <Hl c="focus">pulse</Hl> go out, bounce off the wall and come back while the <Hl c="value">stopwatch</Hl> counts nanoseconds. When it lands, the scene works out the <Hl c="target">distance</Hl> from the time. Then slide the wall in to 100 mm and out to 2000 mm and see how the round trip time changes.
+</Scene>
+
+Run the formula the other way to see what the accuracy demands. The sensor is good to about 15 mm at close range. A 15 mm error in distance is a 30 mm error in the round trip, which is 30 / 300 = 0.1 ns, or 100 **picoseconds** (a trillionth of a second each). To be that accurate, the timing has to be good to about a tenth of a nanosecond. That's arithmetic from the stated accuracy. The spec sheet doesn't say how the sensor gets its timing, so this page doesn't either.
+
+## Reading it
+
+The class is <Api sym="distance/Distance" />, and `frontDistance` is already built from it at the top of `main.cpp`. <Api sym="distance/get_distance" /> returns the distance in millimeters, as a whole number. <Api sym="distance/get" /> does the same thing under a shorter name.
+
+```cpp
+void showDistance() {
+    int mm = frontDistance.get_distance();
+    double inches = mm / 25.4;
+
+    pros::lcd::print(0, "distance: %d mm", mm);
+    pros::lcd::print(1, "%.1f in", inches);
+}
+```
+
+There are 25.4 mm in an inch, and dividing by a `double` keeps the decimals (the integer division surprise from [Math and Decisions](../../cpp-foundations/math-and-decisions/) would chop them off). Call this inside a `pros::delay(10)` loop, as in [Driver Control](../../first-robot-program/driver-control/#why-the-loop-has-a-delay), and see [Inside a PROS Project](../../first-robot-program/inside-a-pros-project/#printing-a-value-to-the-brain-screen) for how `lcd::print` works.
+
+Hold a book at different distances from the sensor. Two of the numbers it can give back aren't distances at all:
+
+- `PROS_ERR` means the call failed, usually because nothing is plugged into port 11. [Why Robots Need Sensors](../why-sensors/#when-the-sensor-isnt-there) covers it, including <T id="errno">`errno`</T>.
+- **9999** means the sensor is working but detected nothing. Point it at open space, or beyond its 2000 mm range, and this is what comes back.
+
+9999 is a <Term id="sentinel-value">sentinel value</Term>: a number set aside to mean something special in place of a measurement. It looks like a distance, since 9999 mm is nearly 394 inches, so nothing about the type warns you. You have to remember to check for it every time, the same way you check for `PROS_ERR`.
+
+## How far off can it be?
+
+VEX's [spec sheet](https://docs.rs-online.com/bd2c/A700000007193336.pdf) gives a range of 20 mm to 2000 mm, an <T id="accuracy">accuracy</T> of about 15 mm below 200 mm and about 5 percent above. The sensor reports whole millimeters, so its <T id="resolution">resolution</T> is 1 mm. As [Why Robots Need Sensors](../why-sensors/#accuracy-precision-and-resolution) pointed out, that is much finer than the accuracy, so a reading of 1000 sounds more exact than it is.
+
+| True distance | Could be off by about | In inches |
+|---|---|---|
+| 100 mm | 15 mm | 0.6 |
+| 500 mm | 25 mm | 1.0 |
+| 1000 mm | 50 mm | 2.0 |
+| 2000 mm | 100 mm | 3.9 |
+
+<Scene name="sensors/accuracy-band">
+Drag the reading across the range. The line is the largest error the spec sheet allows at each distance, and the text above the chart turns that into the range the true distance could be in. Read as written, the band narrows from 15 mm to 10 mm at exactly 200 mm. That's a quirk of two rounded figures, not a property of the sensor.
+</Scene>
+
+Notice who this favors. The error grows with distance, and what you want is usually precision up close, such as stopping 150 mm from a wall, where the allowed error is 15 mm, or 0.6 inches. Far away you only need to know roughly.
+
+These are limits on accuracy. The reading also has <T id="noise">noise</T>, small differences from one reading to the next with the sensor held still. Print the value for ten seconds and watch how much the last digits dance.
+
+<ReadTheDocs>
+VEX's [page on the Distance Sensor](https://api.vex.com/v5/home/python/Sensing/distance-sensor.html) is written for VEXcode, but the hardware is the same. Find the smallest and the largest distance it can measure.
+</ReadTheDocs>
+
+## Confidence and object size
+
+Two more readings come with the distance. <Api sym="distance/get_confidence" /> returns a <Term id="confidence-value">confidence value</Term> from 0 to 63, where 63 means high confidence and lower means less. The header adds that confidence is only available when the distance is greater than 200 mm. It doesn't say what you get inside 200 mm, so print it and see.
+
+<Api sym="distance/get_object_size" /> returns a relative guess at how big the object is, from 0 to 400, or -1 if the sensor can't tell. It isn't millimeters. The header's one reference point is that an 18 inch by 30 inch gray card comes out near 75 in typical room lighting. Bigger objects should read higher and thin ones lower, but how much is for you to measure.
+
+```cpp
+void showConfidence() {
+    pros::lcd::print(0, "dist %d mm  conf %d", frontDistance.get_distance(), frontDistance.get_confidence());
+    pros::lcd::print(1, "size %d", frontDistance.get_object_size());
+}
+```
+
+How low is too low for confidence isn't documented anywhere this page links to. Aim the sensor at your field wall and at a dark corner and see what numbers you get, then choose a cutoff from your own readings.
+
+<ReadTheDocs>
+Open the Distance group in the PROS API. There is one more reading beyond distance, confidence and size. Find the function that reports how fast the object ahead is moving, and what unit it uses.
+</ReadTheDocs>
+
+<Check prompt="Which function did you find, and what unit does it return?">
+<Api sym="distance/get_object_velocity" /> returns the object's velocity as a `double` in meters per second. One meter per second is about 39 inches per second. The header doesn't say whether it means the object moving or the robot closing in on it, so test it by rolling the robot toward a wall while you print it.
+</Check>
+
+## Stopping at a wall
+
+Here's the loop from [Why Robots Need Sensors](../why-sensors/#when-the-sensor-isnt-there) again with one change: the target is a parameter, and the robot keeps going whenever the reading is larger than it. It trusts every reading, which is fine for a first look and gets fixed at the end of the page.
+
+```cpp
+// Drives forward until the sensor sees the wall closer than stopMm. It will coast past
+void approachWall(int stopMm) {
+    leftDrive.move_voltage(6000);
+    rightDrive.move_voltage(6000);
+
+    while(frontDistance.get_distance() > stopMm) {
+        pros::delay(10);
+    }
+
+    leftDrive.brake();
+    rightDrive.brake();
+}
+```
+
+Compare this with `driveUntil` from [Motor Encoders](../motor-encoders/#driving-until-a-distance). That one measures how far the wheels turned, so a robot that starts 2 inches off ends 2 inches off. This one measures against the wall, so where it started barely matters. A wheel that spins in place can't fool it, the way it fooled the encoder in [what motor encoders can't see](../motor-encoders/#what-motor-encoders-cant-see).
+
+The two sensors are also a check on each other. Run the wall approach, then compare how far the wheels say you went with how much closer the sensor says the wall got:
+
+```cpp withprev
+void autonomous() {
+    resetDriveDistance();
+    int startMm = frontDistance.get_distance();
+
+    approachWall(300);
+
+    // Let it finish coasting before reading
+    pros::delay(1000);
+
+    double wheelsInches = getDriveDistance();
+    double sensorInches = (startMm - frontDistance.get_distance()) / 25.4;
+
+    pros::lcd::print(0, "wheels: %.1f in", wheelsInches);
+    pros::lcd::print(1, "sensor: %.1f in", sensorInches);
+}
+```
+
+[`getDriveDistance()`](../motor-encoders/#the-drive-distance-helpers) comes from Motor Encoders. If the two numbers agree to within the sensor's error at your starting distance, about 3 inches at 1500 mm, nothing is surprising. A gap of many inches means the wheels slipped, the wheel diameter or gear ratio in the helper is wrong, or the sensor is looking at something other than the wall. Finding which takes more measuring, and that comparison is the habit worth having.
+
+The sensor reads from its own face, not the robot's bumper. Measure how far the sensor sits behind the front of the robot and subtract that from the distance you want.
+
+Like the wheels, this loop coasts. Braking can't undo the momentum, so choose a stop distance that leaves room. Slowing down smoothly instead of braking hard is the work of the [next section](../../feedback-control/why-control-theory/).
+
+## What it can't tell you
+
+A distance sensor is sharply specific, and almost every surprise comes from forgetting how.
+
+**It looks along one narrow line.** VEX describes the view as very narrow, directly in front of the sensor. Engineers call the region a sensor can see its <Term id="field-of-view">field of view</Term>. The sources linked here give no angle for this sensor, so don't assume one. Measure it: set a wall 500 mm away, then slide a flat board in from the side, a little at a time, and note the reading where it first changes. A narrow view is good for aiming at something. It also means a game piece to the side, or a robot's low bumper under the beam, can pass unseen.
+
+**It reports along the beam, not straight to the wall.** Turn the robot so the sensor points off to one side and the beam hits the wall at a slant. The beam is the slanted side of a right triangle, and the straight-on distance you probably meant is the short side. The slanted side is always longer, and the more you turn, the longer it gets. Working out exactly how much takes trigonometry, which [The Math of Position Tracking](../../localization/position-tracking-math/) teaches visually. You don't need it here, because the table gives the numbers for a wall 1000 mm straight ahead (the beam is 1 divided by the cosine of the angle times as long, if you've met cosine already).
+
+| Off straight by | Beam length for a wall 1000 mm straight-on |
+|---|---|
+| 0 degrees | 1000 mm |
+| 15 degrees | 1035 mm |
+| 30 degrees | 1155 mm |
+| 45 degrees | 1414 mm |
+| 60 degrees | 2000 mm |
+
+This isn't an error in the sensor. It measured the beam's path correctly. The mismatch is between what it measured and the question you asked.
+
+<Scene name="sensors/wall-reading">
+Set the <Hl c="target">straight-on distance</Hl> and turn the robot. The <Hl c="value">beam</Hl> reads its own length, which grows as you turn, and the <Hl c="focus">bracket</Hl> at its tip is the spec sheet's error band. The wall in the picture is 1000 mm long. Start at 0 degrees and notice the reading equals the straight-on distance. Then set the distance to 400 mm, turn to 45 degrees, and keep turning until the beam slides off the end of the wall. What does the sensor say now? Then try 1000 mm and see how little turning it takes.
+</Scene>
+
+Once the beam leaves the wall or passes the 2000 mm range, the sensor has nothing to report, and the answer is the 9999 from earlier. A robot drifting a few degrees as it approaches a wall can read a smoothly falling distance and then abruptly 9999. That is also why the narrow view matters: a short wall is only hit when the robot points at it.
+
+**It depends on the surface.** Light has to reflect off the target and return to the sensor. A dark, rough surface soaks up much of it. A shiny, mirror-like one bounces it away at the angle it arrived, so a slanted shiny surface can send the pulse off to the side rather than back. A clear surface lets some of it through. That is general optics. The sources linked on this page give no figures for any material, so what your sensor does with black foam, a polished sheet or a clear panel is a test to run. Hold each one at the same tape-measured distance, at a few angles. Record the reading and the confidence, and compare the readings with the tape.
+
+**It reports the first thing, not the thing you meant.** The beam returns whatever it hits first. That might be the field wall, an opponent, a game piece, a cable that has sagged in front of the sensor, or a hand. The sensor has no idea which. It knows how far, never what.
+
+## Cleaning up the readings
+
+Three kinds of readings shouldn't be trusted: a `PROS_ERR` from a failed call, a 9999 from nothing detected, and, past 200 mm, a low confidence. This function turns all three into 9999, one value that means "I don't know."
+
+```cpp
+// A starting guess near the middle of 0 to 63. Tune it from your own readings
+const int MIN_CONFIDENCE = 30;
+
+// Returns the distance in mm, or 9999 when the reading can't be trusted
+int checkedDistance() {
+    int mm = frontDistance.get_distance();
+
+    if(mm == PROS_ERR) {
+        return 9999;
+    }
+
+    // Confidence only exists past 200 mm
+    if(mm > 200 && mm < 9999 && frontDistance.get_confidence() < MIN_CONFIDENCE) {
+        return 9999;
+    }
+
+    return mm;
+}
+```
+
+A single stray reading can still slip through, such as a near reading from something that flicked through the beam. Averaging the last few readings doesn't help, because one 9999 drags an average way up. What works is the **median**: sort the last few readings and take the one in the middle. A wild value, high or low, lands at one end of the sorted list and the middle doesn't notice it. Applying the median to a sliding window of recent readings is a <Term id="median-filter">median filter</Term>.
+
+<Scene name="sensors/median-filter">
+A robot closes in on a wall at a steady speed. The <Hl c="focus">yellow dots</Hl> are raw readings with some noise and a few stray near readings, and <Hl c="error">red dots</Hl> at the top are 9999 dropouts. The <Hl c="value">blue line</Hl> is the median of the last few. The data is made up. Start with 1 reading, which is no filter, then try 3, 5 and 9. Watch what happens to the dropouts, and to the line while the robot is moving.
+</Scene>
+
+A bigger window removes more bad readings in a row, but it also trails behind the real distance. The window is a short memory of the past, so the median reports where the wall was a few readings ago. With 5 readings, the filter can cancel up to 2 bad ones. Three bad readings inside one window win, and the median says 9999.
+
+This is the first place you need an array to keep recent values. From [Arrays and Loops](../../cpp-foundations/arrays-and-loops/), an array is a fixed row of boxes, and `%` from Math and Decisions wraps an index back to 0, so the newest reading overwrites the oldest:
+
+```cpp withprev
+const int WINDOW = 5;
+int recent[WINDOW];
+int nextSlot = 0;
+
+// Fill the window so the median is sane from the first loop
+void startFilter() {
+    int first = checkedDistance();
+
+    for(int i = 0; i < WINDOW; i++) {
+        recent[i] = first;
+    }
+}
+
+// Call once per loop. Returns the median of the last WINDOW readings
+int filteredDistance() {
+    recent[nextSlot] = checkedDistance();
+    nextSlot = (nextSlot + 1) % WINDOW;
+
+    // Sort a copy so the window keeps its order
+    int sorted[WINDOW];
+
+    for(int i = 0; i < WINDOW; i++) {
+        sorted[i] = recent[i];
+    }
+
+    // Insertion sort: slide bigger values right and drop each one into its spot
+    for(int i = 1; i < WINDOW; i++) {
+        int value = sorted[i];
+        int j = i - 1;
+
+        while(j >= 0 && sorted[j] > value) {
+            sorted[j + 1] = sorted[j];
+            j--;
+        }
+
+        sorted[j + 1] = value;
+    }
+
+    return sorted[WINDOW / 2];
+}
+```
+
+The standard library can sort for you with `std::sort` from `<algorithm>` ([cppreference](https://en.cppreference.com/w/cpp/algorithm/sort)), but for five values the hand-written loop shows every step. `WINDOW / 2` is integer division, so 5 / 2 is 2, the middle index of 0 through 4.
+
+One thing the headers don't say is how often the Distance Sensor produces a new value. The ADI ports document a 10 ms interval, but nothing here does for this sensor. If your 10 ms loop reads faster than the sensor updates, the window fills with repeats of one reading and the median can't filter anything. Print `recent[]` for a few loops to see whether it holds distinct values.
+
+Now the wall approach again, with the filter and a time limit for the day the sensor gives nothing. `pros::millis()` returns the milliseconds since the program started, so subtracting the start time gives the time spent so far:
+
+```cpp withprev
+// Stops at stopMm, or after timeoutMs if the sensor never says it's there
+void approachWallSafely(int stopMm, int timeoutMs) {
+    startFilter();
+    std::uint32_t startTime = pros::millis();
+
+    leftDrive.move_voltage(6000);
+    rightDrive.move_voltage(6000);
+
+    while(filteredDistance() > stopMm) {
+        if(pros::millis() - startTime > timeoutMs) {
+            break;
+        }
+
+        pros::delay(10);
+    }
+
+    leftDrive.brake();
+    rightDrive.brake();
+}
+```
+
+A filter can clean up readings but can't invent one that never arrived. When the filtered value is 9999, the loop sees "very far" and keeps driving, so the time limit is what stops a robot whose sensor has gone blind. Pick a limit a bit longer than the drive should take.
+
+The sensor now tells you how far, and how much to trust it. It can't tell you what is out there. Telling a red ring from a blue one takes a different kind of sensor, covered on the [optical sensor](../optical-sensor/) page.
+
+<Check prompt="A wall is 750 mm away. What round-trip time does the sensor have to measure, using 300 mm per nanosecond?">
+The light travels out and back, 2 x 750 = 1500 mm. At 300 mm per nanosecond, that's 1500 / 300 = 5 ns. Check it with $d = c \times t / 2$: 300 x 5 / 2 = 750.
+</Check>
+
+<Check prompt="The sensor reads 1500 mm. Using the spec sheet's accuracy, what range could the true distance be in? Then, if the robot is turned 30 degrees off straight and still reads 1500 mm, about how far is the wall straight-on?">
+Above 200 mm the error is about 5 percent, which is 75 mm at 1500, so the true distance is between about 1425 and 1575 mm. For the second part, the beam length is the straight-on distance times 1.155 at 30 degrees, so the straight-on distance is about 1500 / 1.155, or 1300 mm. The sensor measured the beam correctly. The slant is why it reads longer than the wall is.
+</Check>
+
+<Check prompt="Five readings arrive: 612, 9999, 610, 611, 9999. What does the median say? What if a third reading had also been 9999?">
+Sorted, they are 610, 611, 612, 9999, 9999. The middle one, the third, is 612, so the two dropouts did nothing. With three 9999s the sorted list is 610, 611, 9999, 9999, 9999, the middle is 9999, and the filter reports "I don't know." A window of 5 can survive 2 bad readings but not 3.
+</Check>
+
+<Check prompt="A robot should stop 150 mm from the field wall, but it sometimes hits it. The sensor reads 9999 on a few loops just before the wall. Why does the loop keep driving, and what two changes help?">
+A 9999 is larger than the stop distance, so a loop that stops when the reading is at or below the target sees "far away" and keeps driving. The beam can also slide off the wall when the robot is turned slightly, which gives 9999 right when it matters. Passing the readings through a median filter ignores a brief dropout, and a time limit stops the robot if the sensor stays blind. Aiming the sensor straight at the wall helps too.
+</Check>
