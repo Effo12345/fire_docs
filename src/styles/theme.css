@@ -282,3 +282,9 @@ site-search button { border-radius: 0; box-shadow: none; }
 
 /* Keyboard focus */
 :focus-visible { outline: 2px solid var(--fd-value); outline-offset: 2px; }
+
+/* Code shows exactly what to type, so -> and == stay as separate characters */
+code, pre, kbd, samp, .expressive-code, .fd-scene output, svg text[font-family*='mono'], svg text[font-family*='mono'] tspan {
+    font-variant-ligatures: none;
+    font-feature-settings: 'liga' 0, 'calt' 0;
+}
