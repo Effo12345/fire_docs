@@ -1,5 +1,209 @@
 ---
-title: "Limit and Bump Switches"
+title: Limit and Bump Switches
+description: How a pushbutton becomes a number your program can read, why one press can count twice, and how a switch gives a relative sensor its zero.
 ---
+import Scene from '../../../components/Scene.astro';
+import Api from '../../../components/Api.astro';
+import Check from '../../../components/Check.astro';
+import ReadTheDocs from '../../../components/ReadTheDocs.astro';
+import Term from '../../../components/Term.astro';
+import T from '../../../components/T.astro';
 
-This page is being written.
+[Why Sensors](../why-sensors/) ended with the idea that every reading is a number that is a little stale, a little stepped and a little noisy. The simplest sensor there is gives you the least number you can get: one <T id="bit">bit</T>. Something is touching it, or nothing is.
+
+That sounds too small to matter, and it turns out to be one of the most useful sensors on a robot. A switch can't drift, it needs no calibration, and it answers a question no other sensor can answer as cheaply: *has this mechanism reached the end of its travel?* The last section of this page uses that answer to give a sensor that has no sense of position a true zero to count from.
+
+## One bit, two shapes
+
+VEX sells two switches that do the same job. The **bumper switch** has a large button you can hit with a side of the robot, and the **limit switch** has a small lever you can nudge with a moving part. Inside, both are the same idea: two metal contacts that are apart until something pushes them together. A switch like that is called <Term id="normally-open">normally open</Term>, because with nothing touching it, the circuit is open (broken). To your program the two switches look identical, so everything below applies to both. The [BLRS wiki](https://wiki.purduesigbots.com/vex-electronics/vex-sensors/3-pin-adi-sensors/limit-switch) has photos of each if you want to see the difference.
+
+Neither one plugs into a Smart Port. They use the three-wire <T id="adi">ADI</T> ports on the Brain, which are labeled with the letters A to H, and the running robot already has one on port A:
+
+```cpp
+pros::adi::DigitalIn limitSwitch('A');
+```
+
+The class is called <Api sym="adi/DigitalIn" />, and it accepts a letter, in either case, or a number from 1 to 8. A <T id="digital-signal">digital signal</T> has two values, so the object can only report two things.
+
+<ReadTheDocs>
+Open the ADI group in the PROS API (<Api sym="adi" />). Find out what happens if you give the constructor a port that doesn't exist, such as 9. Which error code gets set?
+</ReadTheDocs>
+
+## How a switch makes a signal
+
+Two metal contacts can't send a number to the Brain on their own. They can only connect two points, so the port has to turn "connected or not" into a voltage it can read. The usual design uses a <Term id="pull-up-resistor">pull-up resistor</Term>: a resistor that holds the signal wire at the high level until something connects it to ground.
+
+Press and release the switch in the scene and watch the wire.
+
+<Scene name="sensors/switch-circuit">
+Slide the switch to pressed. The lever touches the lower contact, the wire is tied to ground, and its level drops. Release it and the resistor pulls the wire back up.
+</Scene>
+
+So the wire goes **low** when the switch is pressed, which is the opposite of what you might guess. VEX's knowledge base describes the V5 switches this way (it calls the signal "active digital low"), and so does the BLRS wiki. The older VEX Cortex documentation describes a weak pull-up on its inputs, and the V5 port behaves consistently with one, but VEX doesn't state that for the V5 in anything we could read, so treat it as an inference from the behavior.
+
+## Reading it in code
+
+Two functions on the object matter. <Api sym="adi/get_value" /> reads the current state of the port, and <Api sym="adi/get_new_press" /> returns 1 only on the loop where the switch goes from not pressed to pressed. The second one is a <T id="rising-edge">rising edge</T> detector, the same idea as the controller's "new press" in [Holding versus pressing](../../first-robot-program/driver-control/#holding-versus-pressing).
+
+The header documents one more thing worth knowing: `get_new_press` remembers the last call, so only one place in your program should call it for a given switch. A second call would swallow presses the first one was waiting for.
+
+To see numbers, print them on the Brain's screen the way [the first program](../../first-robot-program/inside-a-pros-project/#printing-a-value-to-the-brain-screen) did. Every loop here includes <Api sym="rtos/delay" /> for [the usual reason](../../first-robot-program/driver-control/#why-the-loop-has-a-delay).
+
+```cpp
+void opcontrol() {
+    int newPresses = 0;
+
+    while(true) {
+        pros::lcd::print(0, "value: %d", limitSwitch.get_value());
+
+        if(limitSwitch.get_new_press()) {
+            newPresses++;
+        }
+        pros::lcd::print(1, "new presses: %d", newPresses);
+
+        pros::delay(10);
+    }
+}
+```
+
+## Which number means pressed?
+
+Run that program, hold the switch down, and read the screen. You're about to find out something the documentation doesn't settle.
+
+The wire goes low on a press, and the VEX knowledge base calls a pressed switch `0`. The BLRS limit switch page also says pressed gives 0. But the PROS documentation for `get_new_press` says it returns 1 "if the button is pressed and had not been pressed the last time", and the PROS code that does this treats any nonzero reading as pressed, with no flip. None of those pages says whether the number is inverted somewhere between the wire and your code.
+
+So measure it. Hold the switch down and note the `value` on line 0. Then watch the counter on line 1 and see whether it goes up when you push the switch or when you let go. If `value` reads 0 while pressed, expect the counter to rise at the release instead, because the function counts a nonzero reading as the press. It may even read 1 before you touch anything. That would mean you shouldn't trust `get_new_press` on this port until you've seen it work. This is a prediction from the documented behavior, not a result from a tested robot.
+
+Whatever you find, write it down once in your code and check against that, so the rest of your program says what it means:
+
+```cpp
+// Set this to the number you saw while holding the switch down
+const int SWITCH_PRESSED = 0;
+
+bool isLimitPressed() {
+    return limitSwitch.get_value() == SWITCH_PRESSED;
+}
+```
+
+This is a [function](../../cpp-foundations/functions/) that returns a [boolean](../../cpp-foundations/variables-types-scope/), so `if(isLimitPressed())` reads like a sentence. If a docs page and your robot ever disagree, the robot is the one to believe.
+
+<ReadTheDocs>
+The two sources behind the "low means pressed" claim are the [VEX knowledge base article](https://kb.vex.com/hc/en-us/articles/360038026831) and the [BLRS limit switch page](https://wiki.purduesigbots.com/vex-electronics/vex-sensors/3-pin-adi-sensors/limit-switch). Read what each says a pressed switch reads, and compare it with the PROS description of <Api sym="adi/get_new_press" />.
+</ReadTheDocs>
+
+## Bounce
+
+A rising edge is only as good as the signal under it, and a mechanical switch makes a messy signal. When the two contacts slam together, they don't stick on the first touch. They spring apart and touch again several times, for a short moment, before they settle. That chatter is called <Term id="contact-bounce">contact bounce</Term>, and every mechanical switch has it. There's no published bounce time for the V5 switches that we could find, so the times in the next scene are illustrative: change them and see what happens, and don't read them as specs.
+
+Your loop doesn't see the contact directly. The ADI port hands your program a new value every 10 milliseconds (the header says so), so your `pros::delay(10)` loop checks the switch about every 10 ms. Chatter that is shorter than that can slip between two checks, and chatter that is longer than a check can land on one.
+
+<Scene name="sensors/bounce-trace">
+One real press, with the contact chattering at first. Start the playback, then slide the loop timing. Find a setting where the program counts the same press twice.
+</Scene>
+
+Whether a press is counted twice depends on where the ticks fall in the chatter, so it happens on some presses and not others. That's a miserable bug to chase, because it comes and goes. The fix is <T id="debouncing">debouncing</T>: don't believe a change until it has lasted a few loops. The green dots in the scene use this rule, "closed on 3 checks in a row". It costs about 30 ms, which no driver will notice. Push the chatter to its longest and the rule can say yes early, because three checks land on closed stretches inside the chatter. The window has to outlast your switch's bounce, so if the press is accepted while the contact is still chattering, lengthen it.
+
+```cpp withprev
+// Waits until the switch has read pressed for three loops in a row
+void waitForPress() {
+    int stableTicks = 0;
+
+    while(stableTicks < 3) {
+        if(isLimitPressed()) {
+            stableTicks++;
+        } else {
+            stableTicks = 0;
+        }
+
+        pros::delay(10);
+    }
+}
+```
+
+The `stableTicks = 0` line is what makes it work. A bounce that reads pressed, not pressed, pressed keeps resetting the count, and the count only reaches 3 once the contact has really settled. Because the function waits until then, it is a <T id="blocking-call">blocking call</T>: nothing else in that loop runs while it waits.
+
+Bounce only damages edges. If you just ask "is the switch pressed right now?", a few chattering loops make no difference to the answer a few milliseconds later. You only need debouncing when you count presses or act once per press.
+
+## An interlock
+
+A simple use of a limit switch is an **interlock**: a rule that stops one action unless a condition is true. Suppose the limit switch is mounted where the arm presses it when the arm is fully down, and you only want the intake running while the arm is down so the intake can't be driven into the arm's path. (This is a thought experiment on the running robot, which has an arm potentiometer and this switch but no arm motor in the code.)
+
+```cpp withprev
+// Call once per loop from opcontrol
+void updateIntake() {
+    bool wantIntake = master.get_digital(pros::E_CONTROLLER_DIGITAL_R1);
+
+    // Both must be true: the driver wants it, and the arm is down
+    if(wantIntake && isLimitPressed()) {
+        intake.move_voltage(12000);
+    } else {
+        intake.move_voltage(0);
+    }
+}
+```
+
+This reads the level of the switch, not an edge, so bounce can't hurt it. The `&&` comes from [Math and Decisions](../../cpp-foundations/math-and-decisions/).
+
+## Finding a known position
+
+Most sensors on this robot only know how far something moved *since they started counting*. A <T id="relative-sensor">relative sensor</T>, such as the encoder inside a motor, wakes up with its counter at zero, wherever the mechanism happens to be. If a lift is halfway up at power-on, the sensor still says 0, and every position your code computes afterward is wrong by that much. The robot doesn't know where it is. It only knows how far it has moved.
+
+A switch fixes that. Move the mechanism slowly until it hits the switch, and now you know exactly where it is, because the switch is bolted to one spot. Call that spot zero. This is called <Term id="homing">homing</Term>, and almost every mechanism with a range of travel does it at the start of a match.
+
+The robot in this guide doesn't have a motor for its arm in the code, so this next example uses a made-up one. If your mechanism has its own motor, the pattern looks like this:
+
+```cpp withprev
+// Only if your mechanism has its own motor. Port 13 is made up for this example
+pros::Motor liftMotor(13, pros::MotorGearset::green);
+
+// Creeps down until the switch is hit, then calls that spot zero
+bool homeLift() {
+    const std::uint32_t timeoutMs = 3000;
+    const std::uint32_t startTime = pros::millis();
+
+    // Low voltage so it touches the switch gently. Negative means down on this lift
+    liftMotor.move_voltage(-3000);
+
+    while(!isLimitPressed()) {
+        if(pros::millis() - startTime > timeoutMs) {
+            liftMotor.move_voltage(0);
+            return false;
+        }
+
+        pros::delay(10);
+    }
+
+    liftMotor.move_voltage(0);
+    liftMotor.tare_position();
+
+    return true;
+}
+```
+
+Read it as three decisions. The motor moves *slowly*, because the mechanism is about to hit something. The loop stops on the switch, using the level of the signal so bounce doesn't matter. And the function ends with <Api sym="motors/tare_position" />, which tells the motor's encoder that this position is zero. The lift coasts a little past the switch after you cut the voltage, so the counter reads slightly below zero a moment later. That's fine as long as it coasts about the same each time.
+
+[Motor Encoders](../motor-encoders/) turns that counter into real distances, and [Potentiometers](../potentiometers/) covers the sensor that never needs homing because it reads an absolute angle.
+
+## When the switch isn't there
+
+Look again at `homeLift`. Why does it have a timeout?
+
+The Brain can't tell a switch that is open from a switch that isn't connected. A port with nothing on it reads exactly like a released switch. If the cable gets pulled out in a match, `isLimitPressed()` just returns `false` forever. For the interlock, that means the intake never runs, which is the safe failure. For homing without a timeout, it means the lift pushes down forever, and it will grind against its own hard stop.
+
+Design every use of a switch by asking what your code does when the switch *never* says pressed. Then handle it: the timeout, and the `false` return that tells the caller homing didn't work, so autonomous can skip anything that depends on the zero.
+
+<Check prompt="You hold the switch down and the Brain prints value: 0, and the counter goes up when you let go. What do you change, and what do you stop using?">
+Change `SWITCH_PRESSED` to 0 so `isLimitPressed()` is true when the reading is 0. Stop using `get_new_press` on this switch. It seems to treat a nonzero reading as pressed, so it fires on the release. If you need one action per press, count the change from not pressed to pressed yourself, with the debounced check.
+</Check>
+
+<Check prompt="Your teammate's score counter goes up by 2 on some presses and by 1 on others, and they swear they press the same way every time. What is happening, and what are two ways to fix it?">
+Contact bounce. On some presses the chatter spans a check where the contact looks open, so the next check sees a new press. It depends on where the ticks land, so it varies. Fix it by debouncing (require several checks in a row before accepting the press), or by not counting edges at all and acting on the switch's level instead.
+</Check>
+
+<Check prompt="In the ADI group of the PROS docs, what happens when the constructor gets port 9?">
+9 is out of range (valid ports are 1 to 8, or the letters a to h in either case), so the constructor sets `errno` to `ENXIO`.
+</Check>
+
+<Check prompt="`homeLift()` returns false. Write down what the autonomous routine should do next.">
+It must not use any position that depends on the zero, because the lift's counter is still wherever it woke up. Print or log a warning, and run a version of the routine that skips those steps (or stop, if the lift is essential). The `false` return is only useful if the caller reads it.
+</Check>
