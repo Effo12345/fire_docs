@@ -1,5 +1,335 @@
 ---
 title: "Inside a PROS Project"
+description: What every folder and function in a PROS project is for, who calls your code and when, how to set up motors and a controller, and how to print a value to the Brain screen.
 ---
+import Scene from '../../../components/Scene.astro';
+import Api from '../../../components/Api.astro';
+import Check from '../../../components/Check.astro';
+import ReadTheDocs from '../../../components/ReadTheDocs.astro';
+import Hl from '../../../components/Hl.astro';
+import Term from '../../../components/Term.astro';
+import T from '../../../components/T.astro';
 
-This page is being written.
+[Installing PROS](../installing-pros/) ended with your own words on the Brain's screen and a folder full of files you didn't write. Nobody said which ones matter, or why a function that nothing seems to call ran at all. This page answers both, and by the end you'll have a motor running from a controller button and a number showing live on the Brain.
+
+## The folders in a project
+
+A PROS project is a folder with a fixed layout. Open yours in VS Code's file panel and you'll find these. Only the first two are yours to change:
+
+- **`src`** holds your code. The template starts with one file, `main.cpp`. Every `.cpp` file you add here gets built along with it.
+- **`include`** holds <Term id="header-file-intro">header files</Term>: files that list the names a piece of code offers, so other code can use them without seeing how they work. `include/pros/` has one per part of the robot, such as `motors.hpp` and `misc.hpp`. These are the real source of truth for the <T id="api">API</T>, so open them when you want to check a fact. Your own headers go here too, once [Splitting Code Across Files](../../bigger-programs/multiple-files/) teaches them. The learncpp article on [header files](https://www.learncpp.com/cpp-tutorial/header-files/) explains the idea.
+- **`firmware`** holds the PROS <T id="library">library</T>, already compiled. Never edit it. If something in there seems broken, the fix is a newer PROS version, not a change by hand.
+- **`bin`** appears after your first <T id="build">build</T>. It holds what the <T id="toolchain">toolchain</T> made, including the <T id="binary-file">binary file</T> that gets uploaded. It's safe to delete, because the next build recreates it.
+- **`Makefile`** and **`common.mk`** tell the build tool how to run the toolchain. You'll look at one line of `Makefile` on [Connecting Wirelessly](../connecting-wirelessly/). `common.mk` you leave alone.
+- **`project.pros`** is a small text file where the PROS command line tool records the project's name, its target (`v5`) and which kernel version it was made from. The tools write it. You don't.
+
+The rule that follows: you write in `src` and `include`, and everything else belongs to the tools.
+
+## main.cpp and the functions you never call
+
+Open `src/main.cpp`. [C++ Foundations](../../cpp-foundations/functions/) said that a program starts in `main`, and there is no `main` here. There is one, inside the library in `firmware`. When the Brain runs your program, that code starts the PROS <T id="kernel">kernel</T>, and the kernel calls your functions by name, at the moments it chooses. A place where a program begins running is its <Term id="entry-point">entry point</Term>. In PROS, the entry points are yours, but the calls aren't.
+
+The template gives you five functions to fill in. They're called the <Term id="competition-template">competition template</Term>, because they follow the stages of a competition match:
+
+```cpp
+void initialize() {}
+void disabled() {}
+void competition_initialize() {}
+void autonomous() {}
+void opcontrol() {}
+```
+
+- `initialize` runs once, right when the program starts. It's for setup that has to happen before anything else.
+- `disabled` runs while the field or the competition switch has the robot switched off.
+- `competition_initialize` runs when the robot connects to a field or competition switch while disabled, before the match. It's meant for choices like which autonomous to run.
+- `autonomous` runs the robot's own plan, with nobody holding a controller.
+- `opcontrol` runs while a driver is in charge.
+
+The names are fixed. The kernel looks for exactly these five, which is why `main.h`, included at the top of the template, declares them. Rename one and the kernel won't find it. If you need other functions, give them other names and call them from these five.
+
+## When each function runs
+
+Knowing the five names doesn't tell you what to put where. That depends on when each one runs, and a match has stages. Press play, then drag the slider through the three setups.
+
+<Scene name="first-robot-program/match-timeline">
+Each row is one function, and a bar grows while it runs. At setup 1, watch the <Hl c="error">red marks</Hl> where a period ends. Then try setup 0, and setup 2, where the robot is disabled in the middle of driver control.
+</Scene>
+
+A real match has two periods. In the <Term id="autonomous-period">autonomous period</Term>, the robot drives from its program alone. In V5RC that lasts 15 seconds. Then comes the <Term id="driver-control-period">driver control period</Term>, 1 minute 45 seconds in V5RC, where drivers use their controllers. Other events and game formats use other lengths, and the code is the same.
+
+Who decides when each period starts? At a competition, the <Term id="field-control">field control</Term> system does. Over the radio, it tells every robot's Brain whether it is disabled, in autonomous or in driver control. A smaller box called a competition switch does the same job for practice. That's setup 1 in the scene.
+
+On a bench with neither, there is nobody to say "autonomous". The template's own comments cover this: with no competition control connected, `opcontrol` starts right after `initialize` finishes. That's setup 0, and it's how you'll work for most of this guide. The comments also say you can call `autonomous()` yourself from `opcontrol` to test it, which [Your First Autonomous](../first-autonomous/) does with a button.
+
+Three details cause mysterious bugs if you miss them.
+
+**Disabled stops your code.** The template says each of these functions is started in its own task, a separate stream of running code (see [Doing Two Things at Once](../../seeing-inside/tasks/) for what that means), and a task can be stopped at any moment. When the robot is disabled or loses its connection, the template says `autonomous` and `opcontrol` are stopped, wherever they were. Enable the robot again and they start over from the first line, which is what setup 2 shows. Anything you declared inside the function is a <T id="local-variable">local variable</T> and begins again from its starting value. Anything you declared outside, a <T id="global-variable">global variable</T>, keeps what it had.
+
+**`initialize` blocks everything else.** The other competition functions wait for it to return, and the template's comment asks you to keep it to a few seconds. That's plenty for setting up motors and the screen. It isn't the place for a long wait.
+
+**Only one competition function runs at a time.** The robot is disabled while it waits before a match, but when it first connects to a field, the kernel starts `competition_initialize` instead of `disabled`, as the kernel source's `system_daemon.c` shows. `disabled` runs when a period ends. So put anything that must happen exactly once in `initialize`.
+
+## Objects: things with actions
+
+The rest of the page uses a new kind of value. In C++ Foundations a variable held a number, and a function did a job. A motor is both at once: it has a port it's plugged into, a direction, a temperature, and it can spin. C++ bundles all of that into one value called an <Term id="object">object</Term>: something that holds its own information and has actions you can ask it to do.
+
+You ask with a dot. If `intake` is a motor object, then `intake.move(127)` asks it to spin. An action that belongs to an object is a <Term id="method">method</Term>. It's a function, called like [the ones you've already met](../../cpp-foundations/functions/), except that it works on the object in front of the dot. `intake.move(127)` and `leftDrive.move(127)` use the same method name and affect different motors, because each object remembers its own port. [Classes](../../bigger-programs/classes/) shows how to build your own. Until then, you only need to use them.
+
+You've also seen `pros::` in front of names. It's a <Term id="namespace">namespace</Term>: a named group of code, there so that two libraries can both have something called `Motor` without colliding. Writing `pros::Motor` means "the `Motor` that lives in `pros`". It's the same idea as the `std::` in `std::cout`, which means the C++ standard library. The learncpp article on [namespaces](https://www.learncpp.com/cpp-tutorial/naming-collisions-and-an-introduction-to-namespaces/) covers it. This guide always writes `pros::` out, so you can tell at a glance what comes from PROS.
+
+## Motors
+
+Here are the first lines of the robot this guide builds on. They go at the top of `main.cpp`, under the `#include`, outside any function, so every function can use them:
+
+```cpp
+pros::MotorGroup leftDrive({-1, -2, -3}, pros::MotorGearset::blue);
+pros::MotorGroup rightDrive({4, 5, 6}, pros::MotorGearset::blue);
+pros::Motor intake(7, pros::MotorGearset::green);
+pros::Controller master(pros::E_CONTROLLER_MASTER);
+```
+
+Each line creates an object and names it. The first number is a port. The Brain has 21 <Term id="smart-port">Smart Ports</Term>, numbered 1 to 21, where motors, the radio and most sensors plug in with a smart cable. `intake` is whichever motor is plugged into port 7. If the number doesn't match your wiring, the code runs without complaint and the wrong motor moves, so check the number first when something spins that shouldn't. Give a number that isn't a port and the constructor fails and sets <T id="errno">`errno`</T> to `ENXIO`, according to its documentation.
+
+### Cartridges and gearsets
+
+The second argument says what's inside the motor. A V5 motor holds an electric motor that spins at around 3600 RPM, plus a gearbox whose gears you can change by swapping a snap-in gear insert called the <Term id="cartridge">cartridge</Term>. <Term id="rpm">RPM</Term> means revolutions per minute, how fast the output shaft turns. The three cartridges, with numbers from the PROS headers:
+
+| Cartridge | Gear ratio | Top speed | PROS name |
+|---|---|---|---|
+| Red | 36:1 | 100 RPM | `pros::MotorGearset::red` |
+| Green | 18:1 | 200 RPM | `pros::MotorGearset::green` |
+| Blue | 6:1 | 600 RPM | `pros::MotorGearset::blue` |
+
+Divide 3600 by each ratio and you get the speeds in the third column. The gearbox trades one thing for another. The motor inside can only push so hard, and gears can turn that push into speed or into twisting force. <Term id="torque">Torque</Term> is that twisting force, the thing you need to lift something heavy or push against another robot. A red cartridge turns six times slower than a blue one and, roughly, has six times the torque to spend. In this guide's robot, the drive uses blue because wheels want speed, and the intake uses green because pulling a game piece in wants more grip than speed.
+
+The word in the constructor is the <Term id="gearset">gearset</Term>, and it's your promise about which cartridge you installed. Nothing checks that the promise is true. A wrong one is a quiet bug: PROS uses the gearset to turn the motor's raw readings into RPM and degrees, and the velocity commands take a range that depends on it (the `move_velocity` documentation says plus or minus 100, 200 or 600). The commands on this page set voltage, so they don't care. The sensor pages and any speed controller do.
+
+<ReadTheDocs>
+Open <Api sym="motors/Motor" /> in the PROS API and read the constructor's documentation. The parameter list shows green as the default, yet the description says the gearset isn't set if you leave it out. What does that mean for a motor with a red cartridge? Then think about why this guide always writes it.
+</ReadTheDocs>
+
+### Several motors, one name
+
+A drivetrain side has three motors that should always do the same thing. A `pros::MotorGroup` is one object that stands for several motors. Write the ports in braces, and `leftDrive.move(100)` commands all three. The class is declared in `motor_group.hpp` and has nearly the same methods as `Motor`.
+
+### What a negative port means
+
+Look again at `leftDrive`: its ports are `-1, -2, -3`. The minus signs aren't typos. A motor's shaft turns one way for positive commands. Bolt one motor on the left of a robot and another on the right, facing the opposite way, and a positive command pushes the two sides in opposite directions. Both sides need to push forward, so one side has to be told to turn the other way.
+
+A negative port number does that. It makes a <Term id="reversed-motor">reversed motor</Term>. Per the constructor's documentation, PROS then reverses the movement commands and the readings, so a reversed motor behaves like a normal one from your code's point of view. Positive always means forward, on every side.
+
+<Scene name="first-robot-program/reversed-motors">
+The robot is told to drive both sides forward. The arrows show which way each side pushes. Flip the slider and watch what changes.
+</Scene>
+
+The left side's three ports are negative and the right side's are positive, because that's how this robot was built. Yours might be the other way around. Whichever it is, the sign belongs in the port list, once. The alternative is negating every call to that side in every function, and the day you rewire a motor you'd have to find all of them. If a robot spins when it should drive straight, the cause is nearly always one side's sign. If it drives straight but backward, both are flipped.
+
+## Two ways to set power
+
+Setting a motor's output is a method call. Two of them matter on this page:
+
+```cpp
+intake.move(127);
+intake.move_voltage(12000);
+```
+
+Both set the <Term id="voltage">voltage</Term> sent to the motor. Voltage is the electrical push, measured in volts. A bigger push drives more current through the motor, and the motor turns faster. With no load on the shaft, speed is close to proportional to voltage: about half the voltage, about half the top speed. A motor takes at most 12 volts.
+
+The two methods differ in units. <Api sym="motors/move" /> takes a number from -127 to 127, the same range as a controller stick, so `intake.move(master.get_analog(...))` works with no conversion. <Api sym="motors/move_voltage" /> takes millivolts, -12000 to 12000, where 12000 is 12 V. The first is convenient for a stick. The second has real units, so it's the one a controller you write yourself should use (the [PID page](../../feedback-control/pid/) says why). The kernel source scales one to the other, so 127 on `move` is 12000 on `move_voltage`.
+
+The documentation gives those ranges and says nothing about what a number outside them does, so don't rely on it. Keep values inside with a [`clamp` function like the one you wrote](../../cpp-foundations/functions/#your-first-function). Both methods return 1 when they work and `PROS_ERR` when they fail, setting `errno`, as <T id="reference-docs">the reference docs</T> list for every method.
+
+A third method, `move_velocity`, asks for a speed in RPM and lets a controller inside the motor chase it. This page doesn't use it.
+
+### What happens when you stop
+
+Telling a motor to move 0 doesn't say how to stop. That's the <Term id="brake-mode">brake mode</Term>, one of three:
+
+- `pros::MotorBrake::coast`: the motor is let go and spins down on its own. A heavy drivetrain rolls for a while.
+- `pros::MotorBrake::brake`: the motor resists spinning, which stops it faster, but it doesn't push back if something moves it.
+- `pros::MotorBrake::hold`: the motor works to keep its position and pushes back if something forces it away. It keeps working for as long as it's stopped, which uses power.
+
+You set it once, usually in `initialize`:
+
+```cpp
+void initialize() {
+    leftDrive.set_brake_mode_all(pros::MotorBrake::brake);
+    rightDrive.set_brake_mode_all(pros::MotorBrake::brake);
+    intake.set_brake_mode(pros::MotorBrake::coast);
+}
+```
+
+`set_brake_mode_all` applies the mode to every motor in a group. Then <Api sym="motors/brake" /> stops a motor using whatever mode it has. That's what the header documents, and it says nothing like it for `move(0)`, so use `brake()` when you mean "stop". A drive should usually brake so the robot doesn't drift when you let go of the sticks, and a mechanism that must stay up against gravity wants `hold`.
+
+<ReadTheDocs>
+Open <Api sym="motors/set_brake_mode" /> and find the full list of brake modes the function accepts, including the older names that start with `pros::E_MOTOR_BRAKE`. Which mode is described as actively holding position?
+</ReadTheDocs>
+
+## The controller
+
+`master` is the Brain's handle on the driver's controller. `pros::E_CONTROLLER_MASTER` is the main one. Two methods read it:
+
+```cpp
+int forward = master.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_Y);
+int pressed = master.get_digital(pros::E_CONTROLLER_DIGITAL_R1);
+```
+
+<Api sym="misc/get_analog" /> returns where a stick is, from -127 (all the way down or left) to 127 (all the way up or right), with 0 at rest. <Api sym="misc/get_digital" /> returns 1 while a button is held and 0 otherwise. The names inside the parentheses are enum values, one for each stick axis and each button. The template's `opcontrol` writes `ANALOG_LEFT_Y` without the long prefix. That works because `main.h` has a line, `PROS_USE_SIMPLE_NAMES`, that turns on short forms of these names. The long forms always work and say where they come from, so this guide uses them. When code you find online looks different, that's usually why.
+
+The template's `opcontrol` also makes its own `master` and its own motors on ports 1 and 2. Delete all of that. Those are <T id="local-variable">local variables</T>, and a local with the same name hides the global one inside its function. Leaving them in means your code talks to the wrong objects and ignores the ones you set up.
+
+## One button runs the intake
+
+Now the pieces can work together. This `opcontrol` runs the intake while R1 is held and stops it when it's released:
+
+```cpp
+void opcontrol() {
+    while(true) {
+        if(master.get_digital(pros::E_CONTROLLER_DIGITAL_R1)) {
+            intake.move(127);
+        } else {
+            intake.brake();
+        }
+
+        pros::delay(10);
+    }
+}
+```
+
+The `while(true)` is an <T id="infinite-loop">infinite loop</T>, on purpose. `opcontrol` is meant to keep running until the robot is disabled, and the kernel stops it then. The `if` asks the controller about R1 over and over, many times a second. <Api sym="rtos/delay" /> at the bottom pauses this task for 10 milliseconds so the rest of the Brain gets its turn. [Driver Control](../driver-control/#why-the-loop-has-a-delay) goes into what happens with no delay and with one that's too long.
+
+Upload it and hold R1. If the intake spins the wrong way, flip the sign of its port, `-7` instead of `7`, for the same reason as on the drive.
+
+## Printing a value to the Brain screen
+
+You can now make the robot do something, but you can't see what it's thinking. Is R1 being read? How fast is the intake really turning? The quickest way to find out is to put a number on the Brain's screen, and it takes one line.
+
+Printing has two parts. First, switch the screen's text display on once, at the start of `initialize`:
+
+```cpp
+void initialize() {
+    pros::lcd::initialize();
+}
+```
+
+Then print from anywhere after that:
+
+```cpp
+pros::lcd::print(0, "intake rpm: %.0f", intake.get_actual_velocity());
+```
+
+<Api sym="llemu/print" /> takes a line number, a string to show, and then any values to put in the string. The screen has eight text lines, numbered 0 to 7 from the top, and a print replaces whatever was on that line. So the line above fills the top row of the Brain's screen with something like `intake rpm: 198`, and shows a new number each time you print again.
+
+The values go into the string wherever you write a **format code**, which starts with `%`. Each code says what kind of value is coming:
+
+```cpp
+pros::lcd::print(0, "intake rpm: %.0f", intake.get_actual_velocity());
+pros::lcd::print(1, "R1 held: %d", master.get_digital(pros::E_CONTROLLER_DIGITAL_R1));
+pros::lcd::print(2, "motor temp: %.1f C", intake.get_temperature());
+pros::lcd::print(3, "done: 100%%");
+```
+
+`%d` is for a whole number such as an `int`. `%f` is for a `double`, and the digits in `%.1f` say how many places to show after the decimal point, so `%.0f` rounds to a whole number and `%.2f` keeps two places. `%s` is for text. To show a literal percent sign, write `%%`. These codes are shared with C's `printf`, and the cppreference page on [`printf` formats](https://en.cppreference.com/w/cpp/io/c/fprintf) lists all of them.
+
+The code has to match the value's type, and nothing checks that it does. A `%d` given a `double` doesn't print an error. It prints nonsense, because the function reads the bytes in the wrong shape, which is the <T id="undefined-behavior">undefined behavior</T> from C++ Foundations. If a number looks absurd, check the code first.
+
+Put one of these inside the intake loop and the screen becomes a live readout:
+
+```cpp
+void opcontrol() {
+    while(true) {
+        if(master.get_digital(pros::E_CONTROLLER_DIGITAL_R1)) {
+            intake.move(127);
+        } else {
+            intake.brake();
+        }
+
+        pros::lcd::print(0, "intake rpm: %.0f", intake.get_actual_velocity());
+
+        pros::delay(10);
+    }
+}
+```
+
+Hold R1 and watch the number climb toward 200, the green cartridge's top speed, then fall when you let go. Later chapters use this same line to show you what the robot is doing.
+
+It can fail quietly. <Api sym="llemu/print" /> returns `false` and sets `errno` when something is wrong: `ENXIO` if you forgot `pros::lcd::initialize()`, and `EINVAL` if the line isn't 0 to 7. In both cases nothing appears on the screen, and nothing complains either.
+
+### How this differs from std::cout
+
+C++ Foundations printed with `std::cout`, and that still works in a PROS project. You don't need the `#include <iostream>` from before: the template's `main.h` has that line commented out, but `api.h`, which it includes, already pulls it in. The two don't go to the same place:
+
+```cpp
+std::cout << "intake rpm: " << intake.get_actual_velocity() << "\n";
+pros::lcd::print(0, "intake rpm: %.0f", intake.get_actual_velocity());
+```
+
+`pros::lcd::print` draws on the Brain's screen. You have to be looking at the robot, a new print replaces the old one, and only eight lines fit. `std::cout` sends text out of the Brain, over the USB cable or the radio, to a terminal on your laptop, where lines pile up in order and you can scroll back through them. The next page, [Connecting Wirelessly](../connecting-wirelessly/#watching-your-programs-output-in-the-terminal), shows how to open that terminal. It also meets `printf`, which prints to the terminal but takes the same format codes as `pros::lcd::print`.
+
+Neither is better: the screen is quick to glance at while you're driving, and the terminal keeps a history. The screen's full name is <T id="llemu">LLEMU</T>, and [Using the Brain Screen](../../seeing-inside/brain-screen/) covers what else it can do, including its buttons.
+
+<ReadTheDocs>
+Open the PROS documentation for <Api sym="llemu/print" /> and the <Api sym="ns-lcd" label="pros::lcd namespace" /> it belongs to. Find the function that clears a single line of the screen, and say when you'd call it.
+</ReadTheDocs>
+
+## The whole file
+
+Everything above fits on one screen. This is the complete `main.cpp` for the page, and each later page in this section adds to it:
+
+```cpp
+#include "main.h"
+
+pros::MotorGroup leftDrive({-1, -2, -3}, pros::MotorGearset::blue);
+pros::MotorGroup rightDrive({4, 5, 6}, pros::MotorGearset::blue);
+pros::Motor intake(7, pros::MotorGearset::green);
+pros::Controller master(pros::E_CONTROLLER_MASTER);
+
+void initialize() {
+    pros::lcd::initialize();
+    pros::lcd::set_text(1, "My first program");
+
+    leftDrive.set_brake_mode_all(pros::MotorBrake::brake);
+    rightDrive.set_brake_mode_all(pros::MotorBrake::brake);
+    intake.set_brake_mode(pros::MotorBrake::coast);
+}
+
+void disabled() {}
+
+void competition_initialize() {}
+
+void autonomous() {}
+
+void opcontrol() {
+    while(true) {
+        if(master.get_digital(pros::E_CONTROLLER_DIGITAL_R1)) {
+            intake.move(127);
+        } else {
+            intake.brake();
+        }
+
+        pros::lcd::print(0, "intake rpm: %.0f", intake.get_actual_velocity());
+
+        pros::delay(10);
+    }
+}
+```
+
+The template's `on_center_button` function and the line that registers it are gone. That line handed the screen a function to call whenever the center button is pressed, and [Using the Brain Screen](../../seeing-inside/brain-screen/) brings it back. The drive motors are created but unused for now, since [Driver Control](../driver-control/) is where the sticks start driving them.
+
+The robot no longer depends on the template, but it still depends on a cable. The next page cuts that.
+
+<Check prompt="You power up the robot at your desk with only a USB cable and no competition switch. Which of the five functions run, and in what order?">
+`initialize` runs first. When it returns, `opcontrol` starts right away. `autonomous`, `disabled` and `competition_initialize` never run, because nothing is telling the robot about a field.
+</Check>
+
+<Check prompt="You tell both sides to drive forward and the robot spins in place, turning to the right. Which line do you change?">
+Turning right means the left side is pushing forward and the right side is pushing backward. So the right drive's ports have the wrong sign: change `{4, 5, 6}` to `{-4, -5, -6}`. Fix it in the port list once, not at every call.
+</Check>
+
+<Check prompt="A call that prints a number on line 8 shows nothing on the Brain and gives no error. Give two things to check, then write the call that prints a double named heading with one decimal place on line 2.">
+Line 8 doesn't exist, because the lines run from 0 to 7, so the call fails with `EINVAL`. The other thing to check is whether `pros::lcd::initialize()` ran in `initialize`, since without it the call fails with `ENXIO`. The call is `pros::lcd::print(2, "heading: %.1f", heading);`.
+</Check>
+
+<Check prompt="Inside opcontrol you declare int presses = 0; before the loop, and the loop adds to it. The robot is disabled and then enabled again mid-match. What does presses hold after the restart, and how would you keep the count?">
+It's 0 again. Disabling stopped the task, and enabling started `opcontrol` from its first line, which creates a fresh local variable. A global variable declared outside every function keeps its value across the restart.
+</Check>

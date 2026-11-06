@@ -1,5 +1,139 @@
 ---
-title: "Installing PROS"
+title: Installing PROS
+description: Install the PROS extension for VS Code, create a project, update the Brain, and get words you typed onto the Brain's screen.
 ---
+import Scene from '../../../components/Scene.astro';
+import Check from '../../../components/Check.astro';
+import ReadTheDocs from '../../../components/ReadTheDocs.astro';
+import Term from '../../../components/Term.astro';
+import T from '../../../components/T.astro';
+import Api from '../../../components/Api.astro';
 
-This page is being written.
+You can write C++ now, and you have a robot. Between them is a gap: your code is text on a laptop, and the Brain only runs machine code. [What Code Actually Does](../../start-here/what-code-does/) covered the translating. This page sets up the tools that do it and ends with something you can see, words you typed showing up on the Brain's screen.
+
+Most of this page is steps. Each one links to where it comes from, because these tools change between versions and this page will age. When a step here disagrees with what you see, trust your screen and the linked source.
+
+## What you're about to install
+
+Five different things get called "PROS", and mixing them up makes problems confusing. Here they are, in the order the chain uses them.
+
+- An <Term id="ide">IDE</Term> (integrated development environment) is the program where you write, build and upload code in one window. Yours is [Visual Studio Code](https://code.visualstudio.com/), or VS Code. It's a general editor and knows nothing about robots on its own.
+- The **PROS extension** is an add-on for VS Code from Purdue SIGBots. It adds a PROS icon and a menu of buttons for building and uploading. It does little work itself. Each button runs a command for you.
+- The <Term id="cli">CLI</Term> (command-line interface) is a program you control by typing commands. The PROS CLI is the program the buttons run, and its commands start with `pros`, as in `pros make` and `pros upload`. The extension's [source code](https://github.com/purduesigbots/pros-vsc/blob/develop/src/commands/buildUpload.ts) shows the Build & Upload button doing exactly this: it runs `pros make`, and only if that works it runs `pros upload`.
+- The <T id="toolchain">toolchain</T> is the set of build tools you met earlier, with the <T id="compiler">compiler</T> in it. The extension downloads it for you, and the CLI runs it.
+- The <Term id="kernel">kernel</Term> is the core of PROS. It's the code that runs on the Brain beside yours: it starts your program, calls your functions at the right times, and shares the processor among tasks. Your project contains a copy of it, and your code calls into it. That's why `pros::delay` and `pros::Motor` exist.
+
+Two more words you'll see. A <Term id="template-pros">template</Term>, in PROS's own use of the word, is a packaged and versioned bundle of library code that a project includes. The kernel is one. (Not the same as the code packages from [How to Use This Guide](../../start-here/how-to-use-this-guide/#a-note-on-templates), or a C++ template.) An <Term id="sdk">SDK</Term> (software development kit) is the whole kit for programming one kind of device: the toolchain, the kernel's headers and library, and the tools that talk to the device. PROS is the SDK for the V5 Brain in this sense.
+
+Then there is <Term id="firmware">firmware</Term>: software that lives inside a device and runs its hardware. The Brain has VEXos, its operating system. It's separate from your program, and it updates separately, which is one of the steps below.
+
+## Install VS Code and the extension
+
+1. Install VS Code from [code.visualstudio.com](https://code.visualstudio.com/). PROS's [getting started page](https://pros.cs.purdue.edu/v5/getting-started/index.html) names this as the best way to install PROS.
+2. In VS Code, open the Extensions view from the sidebar, search for `PROS`, and install the one from `sigbots`. That's the [PROS extension on the Marketplace](https://marketplace.visualstudio.com/items?itemName=sigbots.pros), and its code is [on GitHub](https://github.com/purduesigbots/pros-vsc).
+3. A new PROS icon appears in the sidebar. Open it. The extension checks whether the CLI, the toolchain and VEX's `vexcom` upload utility are installed and working, and if one isn't it asks to install it. The getting started page describes a button labeled "Install it now". In the extension's current [source](https://github.com/purduesigbots/pros-vsc/blob/develop/src/one-click/install.ts), the question reads like "PROS CLI and Toolchain and Vexcom are not working. Install now?" with an "Install now!" button, so your wording may differ. Say yes and wait. It downloads several things, and the docs warn that it may take a while.
+
+If you decline, or the install fails halfway, you can run it again from the PROS sidebar: **Manage Installations**, then **Manage PROS**, which offers Install PROS, Uninstall PROS and Verify PROS Installation. The extension's [sidebar code](https://github.com/purduesigbots/pros-vsc/blob/develop/src/views/tree-view.ts) lists the same names, with this description under Install: "Installs the latest version of the PROS CLI, PROS Toolchain, and VEX vexcom utility". Verify does the check described above, and says "Everything is currently working and up to date." when it passes.
+
+Older guides on the web tell you to install the PROS Editor, which was based on Atom, or give per-system steps for PROS 3. The VS Code route replaces those. If a page mentions Atom, it's out of date.
+
+Open the PROS sidebar once it's installed. It's the map for the rest of the page. Its sections are Quick Actions (Build & Upload, Upload, Build, Clean, Run, Stop, Integrated Terminal), V5 Brain (Brain Terminal, Capture Image, Set Team Number, Set Robot Name, Battery Medic, Update VEXos), Conductor (Upgrade Project, Create Project, Project/Template Info, Reset Conductor) and Manage Installations. These names come from the extension's [tree-view source](https://github.com/purduesigbots/pros-vsc/blob/develop/src/views/tree-view.ts), so they're what current versions show.
+
+## Update the Brain's firmware
+
+Do this once, before your first upload, with the Brain connected and powered. A Brain whose VEXos is far behind the tools is one more thing that can go wrong while you're learning, and VEX's own software refuses to download to an out-of-date Brain ([VEX's article](https://kb.vex.com/hc/en-us/articles/360047130071-Coding-with-VEXcode-V5)). PROS isn't documented to refuse, so treat this as a precaution.
+
+1. Plug the Brain into your computer with a USB cable. VEX's [connection articles](https://kb.vex.com/hc/en-us/articles/17783141418516-Connecting-with-App-based-VEXcode-V5-Windows) describe a Micro-USB cable from the V5 Brain to the computer, with the Brain turned on and powered by its battery. A phone charging cable may carry power but no data, so use the cable from your kit if you can.
+2. In the PROS sidebar, under V5 Brain, click **Update VEXos**. In the extension's [source](https://github.com/purduesigbots/pros-vsc/blob/develop/src/commands/fw-update.ts), that button runs `vexcom --vexos latest`, and shows "Updating VEXos", then "VEXos Updated Successfully".
+3. Don't unplug anything while it runs. When it finishes, power-cycle the Brain (off, then on). VEX gives both instructions in its [firmware articles](https://kb.vex.com/hc/en-us/articles/6351088968596-Understanding-the-VEX-V5-Firmware-Utility).
+
+VEX also has its own V5 Firmware Utility for this job. The sidebar button is enough for us, and the utility matters later for one reason, covered in the troubleshooting list.
+
+## Create a project
+
+A **project** is a folder containing your code and everything needed to build it. You create one from a copy of the kernel template.
+
+1. In the PROS sidebar, under Conductor, click **Create Project**.
+2. A folder picker opens, titled "Select a directory to create the project in". Choose where the project's folder should live, such as a `robot` folder in your documents.
+3. A box asks for a name, with the example `my-project`. Pick something plain without spaces, like `first-robot`. This name also becomes the program's name on the Brain.
+4. A list titled "Select the target device" offers `v5` and `cortex`. Choose `v5`. Cortex was VEX's older controller, which the V5 replaced.
+5. A list titled "Select Project Version" offers `latest`, marked Recommended, then the individual kernel versions. This guide was checked against PROS 4.2.3. `latest` gives you that one or something newer. If you want exactly this guide's version, pick `4.2.3` from the list.
+6. The extension creates the project, shows "Creating Project" and then "Project Created Successfully", and opens the new folder in VS Code.
+
+Those prompts, titles and messages come straight from the extension's source in [create-project.ts](https://github.com/purduesigbots/pros-vsc/blob/develop/src/commands/create-project.ts) and [command_tools.ts](https://github.com/purduesigbots/pros-vsc/blob/develop/src/commands/command_tools.ts). Behind the scenes, the extension runs the CLI's `pros c new` command with your folder, the target and the version. The next page tours what it made. For now, open `src/main.cpp`.
+
+## What the template program does
+
+The file you open is the template's `main.cpp`. This is the start of it, from the PROS repository's [4.2.3 version](https://github.com/purduesigbots/pros/blob/4.2.3/src/main.cpp), with its comments and the other competition functions left out:
+
+```cpp nocheck
+void initialize() {
+    pros::lcd::initialize();
+    pros::lcd::set_text(1, "Hello PROS User!");
+
+    pros::lcd::register_btn1_cb(on_center_button);
+}
+```
+
+Read it the way [What Code Actually Does](../../start-here/what-code-does/) taught you: statements, top to bottom. `initialize` is a <T id="function">function</T> you don't call. The kernel calls it once when the program starts, and the next page explains the full set of functions it calls and when. The first line sets up the Brain's text display. The second writes the text "Hello PROS User!" on line 1 of it, using <Api sym="llemu/set_text" />. The third attaches a click handler, which the next page explains.
+
+So the template already does something you can see. You don't have to write a line to find out whether your setup works.
+
+## Build and upload
+
+With the Brain plugged in and the project open:
+
+1. In the PROS sidebar, click **Build & Upload** under Quick Actions. The extension also puts a PROS button at the top right of an open code file that builds and uploads, per its [README](https://github.com/purduesigbots/pros-vsc#quick-action-button).
+2. A notification shows "Building Project". The extension runs `pros make`, which uses the project's <Term id="makefile">Makefile</Term>: a file of rules telling the build tools which files to compile and how to combine them. If the build fails, the upload doesn't start. That is in the [Build & Upload code](https://github.com/purduesigbots/pros-vsc/blob/develop/src/commands/buildUpload.ts).
+3. Then "Uploading Project" appears with a progress bar, and finally "Project Uploaded Successfully", from [upload-command.ts](https://github.com/purduesigbots/pros-vsc/blob/develop/src/commands/upload-command.ts). The first build compiles the whole kernel, so expect it to take longer than the builds after it.
+4. If more than one Brain or controller is plugged in, the extension asks which port to use.
+
+The whole path is the animation below. Your files and the kernel go through the compiler and linker, which together are a <T id="build">build</T>, and out comes a <T id="binary-file">binary file</T>. <Term id="upload">Uploading</Term> sends that file from your computer to the Brain.
+
+<Scene name="first-robot-program/build-upload">
+Watch which things come from you and which don't, and find where the `.bin` file ends up. Step through it and name each stage before you read the caption.
+</Scene>
+
+By default the upload goes to program slot 1, and the program takes the project's name. Both come from the CLI's [upload command](https://github.com/purduesigbots/pros-cli/blob/master/pros/cli/upload.py): the slot defaults to 1 unless the project says otherwise, and the name defaults to the project's name. Later pages cover the eight slots properly. The same code shows that after an upload the CLI asks the Brain to show the program's run screen, not to run it right away. So look at the Brain, find your program, and press its run button.
+
+## How to tell it worked
+
+You should see "Hello PROS User!" on the Brain's screen. It's on the second row of text, because the rows are numbered from 0 and the template wrote to row 1.
+
+Now make it yours, which proves you can change code and get the change onto the robot. In `src/main.cpp`, change the text in that one line:
+
+```cpp
+pros::lcd::set_text(1, "Hello from team 1234A");
+```
+
+Use your own team number or name. Keep it short, since the screen is narrow. Run **Build & Upload** again, press run on the Brain, and read your own words on it. Uploading the same project again replaces what is in that slot, so the old version is gone. This edit, build, upload, look cycle is the loop of the whole season, and everything else just changes what's in the middle.
+
+If you get a red error instead of a successful build, read it from the top as [What Code Actually Does](../../start-here/what-code-does/#when-it-goes-wrong) showed. A missing quote mark or semicolon on that one line is the usual cause.
+
+<ReadTheDocs>
+Open the [display tutorial or the LLEMU documentation](https://purduesigbots.github.io/pros-doxygen-docs/llemu.html) and find how many lines of text the screen has, and what <Api sym="llemu/set_text" /> returns. The next page's printing recipe depends on both.
+</ReadTheDocs>
+
+## When it doesn't work
+
+Check these before you ask for help.
+
+- **"Could not open port" during upload.** Some other program is holding the Brain's USB connection. PROS's [troubleshooting page](https://pros.cs.purdue.edu/v5/pros-4/troubleshooting.html) names the VEX V5 Utility as the common one: close it, and any other VEX software that's connected to the Brain, then upload again.
+- **The extension won't install, or the install fails.** Use Manage Installations, Manage PROS, Verify PROS Installation to see which part is missing, then Install again. From its source, the installer downloads the CLI, toolchain and `vexcom` from the internet, so a network that blocks downloads, as some school networks do, could be the cause. Trying another network rules it out. The extension has no sidebar entry for the log files it writes, but its settings include "Use Logger", which saves events that help someone else diagnose your problem.
+- **No port found.** If the CLI can't find a Brain, its message is "No port provided or located". Check, in order: the cable is fully seated in both ends and is a data cable, the Brain is on, and nothing else is connected to it. Then unplug the Brain, plug it back in and try again.
+- **VS Code underlines `#include "main.h"` as not found in a fresh project.** PROS's [troubleshooting page](https://pros.cs.purdue.edu/v5/pros-4/troubleshooting.html) says this happens when the compilation database, a file listing the exact compiler commands for the project, is out of date, and that a full build regenerates it. Run **Build** from Quick Actions, then close and reopen the file if the underline stays.
+- **The upload worked but nothing is on the screen.** Make sure you pressed run for your program, and that you uploaded the right project. If you opened a different folder, the sidebar buttons act on that one.
+
+<Check prompt="You change one word in main.cpp, press Build & Upload, and the build shows a red error. Does the old program still run on the Brain? Why?">
+Yes. If the build fails, the extension never starts the upload, so the Brain still has whatever it had before. Nothing reached it.
+</Check>
+
+<Check prompt="Which of these live on your laptop and which on the Brain: the compiler, the .bin file after you build, your program in slot 1, VEXos?">
+The compiler is on your laptop, in the toolchain the extension installed. The `.bin` file sits in your project's `bin` folder on the laptop until you upload it. After the upload, a copy of your program is in slot 1 in the Brain's flash memory. VEXos is the Brain's own firmware, and it's updated separately from your program.
+</Check>
+
+<Check prompt="A teammate says: I changed the text in main.cpp and the Brain still shows the old words. List two things you'd check.">
+Did the build succeed, or did an error stop the upload? Did you press run on the Brain for the new upload, rather than the old copy still on screen? Is the open folder the project they meant to upload? Any two of these are good answers.
+</Check>
+
+The Brain now runs something of yours, but you haven't seen what's in the project beyond one function. Next is [Inside a PROS Project](../inside-a-pros-project/), which walks through every file and folder the template created, and why the kernel is the one calling your functions.

@@ -1,5 +1,270 @@
 ---
 title: "Saving Your Work with Git"
+description: How to keep a history of your robot code, try ideas on a branch, go back to a version that worked, and keep a copy on GitHub, all from the VS Code Source Control panel.
 ---
+import Scene from '../../../components/Scene.astro';
+import Check from '../../../components/Check.astro';
+import ReadTheDocs from '../../../components/ReadTheDocs.astro';
+import Hl from '../../../components/Hl.astro';
+import Term from '../../../components/Term.astro';
+import T from '../../../components/T.astro';
 
-This page is being written.
+The program now drives, toggles an intake and runs a plan on its own. That makes it worth protecting. Picture the night before a competition: you try a new stick curve, upload it, and the robot feels wrong. Which numbers did you change? What did it feel like an hour ago? If the only copy of the code is the one you just edited, the working version is gone, and you're rebuilding it from memory.
+
+You may have seen the usual fix: `main_final.cpp`, `main_final2.cpp`, `main_REALLYfinal.cpp`. It works until two of them disagree and nobody remembers which one is on the robot. <Term id="version-control">Version control</Term> is a tool built for this problem. It records the history of your files so you can compare versions, go back to one, and share the work with a team. The version control tool almost every programming team uses is Git, and this page uses it through the panel built into VS Code.
+
+## A repository is a folder plus its history
+
+Git keeps its records in a hidden folder named `.git` inside your project. A project folder together with that recorded history is a <Term id="repository">repository</Term>, usually shortened to repo. The history is a chain of <Term id="commit">commits</Term>. A commit is a saved snapshot of the whole project at one moment, with a message you write saying what changed, plus a few details Git adds: who made it, when, and an id.
+
+Each commit points back to the one before it, which is what makes it a history instead of a pile of copies. Each also has an id, called a hash: a long string of letters and digits that tools shorten to seven or so, like `07d8ddb`. You'll mostly click commits in a list instead of typing hashes.
+
+Git doesn't save every keystroke. You choose when to take a snapshot, and that choice is the habit that matters most on this page.
+
+## Getting ready
+
+Git is a separate program, and VS Code's panel is a front end for it. [Install Git](https://git-scm.com/downloads) first. Then, in VS Code, open **Terminal > New Terminal** and check that Git is found. This is the only typing the setup needs:
+
+```
+git --version
+```
+
+If you see a version number, you're set. If the command isn't found, restart VS Code, because it looks for Git when it starts. VS Code's [troubleshooting page](https://code.visualstudio.com/docs/sourcecontrol/troubleshooting) covers the "Git not found" case.
+
+Every commit records an author, so Git needs your name and email once. They label your commits and aren't a password or a sign-in:
+
+```
+git config --global user.name "Your Name"
+git config --global user.email "you@example.com"
+```
+
+This is once per computer. If you skip it, the first commit fails with a message saying `user.name` and `user.email` are missing, and running those two lines fixes it.
+
+Next, open your robot project as a folder with **File > Open Folder...**, choosing the folder that contains `src`, `include` and the `Makefile`. Then open the Source Control view from the Activity Bar, or press Ctrl+Shift+G. If the folder isn't a repository yet, the view shows an **Initialize Repository** button. Don't click it yet. One decision comes first.
+
+## What Git should leave alone
+
+Every time you build, PROS writes files into `bin/`: compiled objects and the `.bin` file that goes to the Brain. Those are the <T id="binary-file">binary file</T> and its leftovers from [What Code Actually Does](../../start-here/what-code-does/). They're made from your source code, so they can always be made again. In history they're large, they change on every build, and they fill every diff with unreadable noise. Two teammates who each build also produce files that disagree.
+
+A <Term id="gitignore">.gitignore</Term> file is a list of patterns for files Git should pretend aren't there. The PROS template includes one. This is its content in the [PROS repository at the 4.2.3 tag](https://github.com/purduesigbots/pros/blob/4.2.3/template-gitignore), the file the template's build renames to `.gitignore`:
+
+```
+# Compiled Object files
+*.o
+*.obj
+
+# Executables
+*.bin
+*.elf
+
+# PROS
+bin/
+.vscode/
+.cache/
+compile_commands.json
+temp.log
+temp.errors
+*.ini
+.d/
+```
+
+The first two groups are compiled output. Under `# PROS`, `bin/` is the folder the build fills, and `.d/` is where the build records which files depend on which, so it can rebuild only what changed. `temp.log` and `temp.errors` are leftovers. `.vscode/`, `.cache/` and `compile_commands.json` are editor and tooling files that each computer generates for itself, and `*.ini` covers settings files of the same kind. Sharing any of these only makes teammates disagree. A line starting with `#` is a comment, `*` matches any run of characters, and a trailing `/` means a folder. The [Git documentation](https://git-scm.com/docs/gitignore) has the full pattern rules.
+
+Look at what's missing. `src/`, `include/`, the `Makefile` and `project.pros` aren't ignored, so they're saved, which is right: those are your program. `firmware/` isn't ignored either. Open your own project's `.gitignore` and compare, because a later template may differ from the 4.2.3 one above, and yours is the one that counts.
+
+Order matters. A `.gitignore` only affects files Git isn't tracking yet. If a file was committed once, adding it to `.gitignore` later does not remove it from history, and it keeps showing up as changed. Ignoring before the first commit avoids that cleanup. Click **Initialize Repository** now. The folder is a repository with no commits in it.
+
+## Taking a snapshot
+
+The Source Control view now lists your whole project under **Changes**, each file marked with a U for untracked: Git sees the file but hasn't recorded it. Files that `.gitignore` covers are absent. The badge on the Source Control icon in the Activity Bar counts how many files have changed.
+
+Saving a file and committing are different acts. Saving writes to your folder. A commit is a deliberate snapshot, and there's a step in between. The scene follows one edit to `main.cpp` through four places.
+
+<Scene name="first-robot-program/three-places">
+Watch the Toggle intake commit appear. It starts in the working folder, then moves with the plus button, then with Commit, then with Sync Changes. If your laptop died after Commit but before Sync Changes, which places would still have the commit?
+</Scene>
+
+Here's the sequence in the panel, with the words the scene used.
+
+1. **Look at the change.** Click a file under Changes. VS Code opens its <Term id="diff">diff</Term>, a view that shows exactly which lines were added, removed or changed compared to the last commit. Reading the diff before every commit is the best way to catch a stray edit.
+2. **Stage it.** Hover over the file and click the **+** (Stage Changes). Hover over the **Changes** heading and click its + to stage everything at once. <Term id="staging">Staging</Term> means choosing what goes into the next commit. The file moves to **Staged Changes**.
+3. **Write a message.** Type it in the box at the top of the Source Control view.
+4. **Click Commit.** The file leaves Staged Changes, and the commit appears in the Source Control Graph, the history list in the same view. It is stored on your computer only.
+
+Why a separate staging step? You might have edited three things and want two commits. If a file holds a bug fix and an unrelated tidy-up, you can stage only some lines from the diff view, so each commit says one thing.
+
+Stage on purpose. If you click Commit with nothing staged, what happens depends on a VS Code setting. By default it asks whether to stage all your changes and commit them directly, and your answer decides. Your settings may differ, so look at the prompt before you answer it.
+
+### Messages and habits
+
+A message is a note to your future self at 9 p.m. before a match. Make the first line a short sentence that says what changed: `Add arcade drive and intake toggle`, `Scale arcade drive instead of clamping`, `Add timed autonomous`. A message like `stuff` or `fix` tells you nothing when you're scanning for the commit where driving felt right.
+
+Commit when something works, and commit before you change it. The second is the one people forget: if the robot drives well, commit before trying a new curve, not after. Each commit is a place you can get back to, and the next sections depend on having them.
+
+Before a competition, commit what you're about to upload. While the Source Control view shows no pending changes, the program on the Brain matches a known commit, and you can find it again next week.
+
+## Branches: trying an idea without risking the working one
+
+Committing before an experiment helps, but a failed experiment still sits on top of your good code. A <Term id="branch-git">branch</Term> is a separate line of commits that starts from a commit you choose, so you can try something without disturbing the version that works. The first branch is the one Git made for you, usually named `main` or `master` depending on your Git version and settings. The Status Bar along the bottom-left of VS Code shows which you have. This page says `main`, so read it as your name.
+
+The scene plays out a small history, using the real changes from the last two pages.
+
+<Scene name="first-robot-program/commit-graph">
+Follow the yellow ring, which marks where your files are. Where does it go when the curved-arcade idea fails, and what happens to the commit on that branch? Then watch what the merge commit points to.
+</Scene>
+
+Each circle is a commit, and each line points back to the commit before it. The ring is the commit your files currently match. Three things to see:
+
+- **Making a branch costs nothing.** It's a new name pointing at the commit you're on. No files are copied.
+- **Switching branches changes your files.** When the ring goes back to `main`, your folder becomes what the third commit left, and the curve code disappears from it. It isn't gone from history: the `try-curved-arcade` commit is still there, and you could switch back and find it.
+- **A merge brings two lines together.** To <Term id="merge">merge</Term> is to combine the changes from one branch into another. Here `timed-auton` is merged into `main`, which creates a merge commit with two parents.
+
+In the panel, click the branch name in the Status Bar. The list that opens shows branches to switch to, and **Create new branch...**. Name it for the idea, such as `try-curved-arcade`. VS Code makes the branch and switches to it in one step. To switch back, open the same list and pick `main`.
+
+To merge, first switch to the branch that should receive the changes, here `main`. Then open the Command Palette (Ctrl+Shift+P), run **Git: Merge...**, and pick the branch to bring in. If the branches changed different parts of the code, Git finishes the merge itself. If they changed the same lines, you get a conflict, covered below. These menus come from VS Code's [branches guide](https://code.visualstudio.com/docs/sourcecontrol/branches-worktrees).
+
+Git usually refuses to switch branches if that would overwrite edits you haven't committed. Commit them first.
+
+## Going back to something that worked
+
+This is the part that matters most, and a wrong click here can cost you work. The panel has several actions that sound like "undo", and they do very different things.
+
+One rule sorts the risks. **Committed work is very hard to lose. Uncommitted work is the work at risk.** A commit stays in history even after you leave it behind. Edits that were never committed live only in your folder, and some actions overwrite them with no way back. When you're unsure, commit first. A save-point commit on a throwaway branch takes seconds and makes later mistakes recoverable.
+
+The scene shows four of the actions on the same history. Pick one with the slider and watch what happens to the files, the commits, and the edits.
+
+<Scene name="first-robot-program/undo-actions">
+Step the slider through the four actions. For each, notice two things: what happens to the commits in the chain, and where the <Hl c="focus">yellow ring</Hl>, the commit your files match, ends up. Which one leaves nothing behind that you could get back?
+</Scene>
+
+### Edits you haven't committed
+
+- **Unstage** (the **-** beside a file in Staged Changes) takes the file out of the next commit. Your edits stay in the file. Nothing is lost.
+- **Discard Changes** (right-click a file under Changes) throws the edits away. For a tracked file, the file goes back to its staged version, or to the last commit's version if nothing is staged. Your edits don't go to a recycle bin, and Git has no copy of them. For a brand-new untracked file, Discard removes the file. This is the action here that destroys work. VS Code asks you to confirm, so read the confirmation instead of clicking through it.
+
+If you aren't sure you'll want those edits, commit them to a branch first. A commit named `Experiment, not working` on a branch you never use again is far cheaper than a lost afternoon.
+
+### A commit you just made, not shared yet
+
+- **Undo Last Commit** is under the **...** (More Actions) menu in the Source Control view, in **Commit**. It removes the most recent commit from the branch and leaves its changes in your files, staged, so you can fix them and commit again. Only the history changes, not your code.
+- **Commit (Amend)** is in the dropdown beside the Commit button. It replaces the last commit with a new one, handy for a typo in the message or a forgotten file.
+
+Use both only on commits you haven't pushed. Rewriting history that others already have causes trouble for them.
+
+### A commit that's already on GitHub
+
+Once other people may have a commit, don't remove it. A <Term id="revert-git">revert</Term> adds a new commit that cancels the effect of an earlier one, so the history keeps both the mistake and the fix, and nobody's copy breaks. VS Code's guide does this in the terminal, using the commit's hash from the Source Control Graph:
+
+```
+git revert --no-edit <commit-hash>
+```
+
+Git makes the new commit with a generated message, and you push it like any other. If the revert hits conflicting changes, VS Code's [staging guide](https://code.visualstudio.com/docs/sourcecontrol/staging-commits) explains how to continue or abort. Reverting a merge commit means choosing which side to keep, so ask someone experienced first.
+
+### Getting an old version of the whole program back
+
+The panel's answer is to check out the old commit.
+
+1. **Look first.** In the Source Control Graph, click a commit. VS Code lists the files it changed, and clicking a file opens its diff. This does not change your files.
+2. **Check it out.** Right-click the commit and choose **Checkout (Detached)**. Your files now match that commit exactly, and you can build and upload that old version. If you have uncommitted edits that the checkout would overwrite, Git refuses and tells you to commit them first, which protects you.
+3. **Decide what happens next.** Normally your files follow a branch, and each new commit moves the branch forward. After Checkout (Detached), your files sit on a commit that no branch points to. That state is a <Term id="detached-head">detached HEAD</Term>, where HEAD is Git's name for the commit your files are on. The Status Bar shows a commit id where the branch name used to be. It's safe for looking and testing. The risk is committing here: those commits belong to no branch, so switching away leaves them easy to lose.
+
+To keep working from the old version, make a branch before you commit: run **Git: Create Branch...** from the Command Palette and name it, for example `back-to-qualifier-code`. If you only wanted to look, click the branch name in the Status Bar and pick `main`, and your files return to where `main` was.
+
+If you committed while detached and switched away, the commits aren't deleted yet. The terminal command `git reflog` lists recent commits with their ids. Go back to the one you want with `git switch --detach <commit-hash>`, then run **Git: Create Branch...** to save it. Do that soon, because Git eventually cleans up commits nothing points to.
+
+Nothing in these steps deletes `main` or any commit.
+
+### Which one should you pick?
+
+| What happened | Action | Your edits | History |
+|---|---|---|---|
+| Staged the wrong file | Unstage (-) | Kept | Unchanged |
+| Edits you want gone, never committed | Discard Changes | Lost for good | Unchanged |
+| Committed too soon, not pushed | Undo Last Commit | Kept, staged | Last commit removed |
+| A bad commit is already on GitHub | Revert, in the terminal | Kept | New commit added |
+| Want an old version back | Checkout (Detached), then a branch | Git refuses if it would overwrite them | Unchanged |
+
+Online answers will sometimes tell you to run `git reset --hard`. It discards uncommitted edits across the whole project and moves your branch back, as permanently as Discard Changes but with a bigger reach. The panel has no button for it, and you won't need it.
+
+<ReadTheDocs>
+Open VS Code's [Staging, commits and undo](https://code.visualstudio.com/docs/sourcecontrol/staging-commits) page and find its table of undo and discard actions. Which action does it list for a commit that other people may already have, and what does that action do to the shared history?
+</ReadTheDocs>
+
+## Keeping a copy on GitHub
+
+Everything so far lives on one computer. If it's lost, so is the history. A <Term id="remote">remote</Term> is a copy of your repository hosted somewhere else, and GitHub is the service most teams use. It also gives the team one shared place to get the code.
+
+Create a free account with GitHub's [account guide](https://docs.github.com/en/get-started/start-your-journey/creating-an-account-on-github). Back in VS Code, open the Command Palette and run **Publish to GitHub**. Sign in when asked, name the repository, and choose public or private. Anyone on the internet can read a public repository, and only people you invite can read a private one. Either way, never commit anything secret, such as a password.
+
+Publishing creates the repository on GitHub, connects it as a remote and uploads your commits. Open the repository on GitHub afterward and check that your files are there. GitHub's [Hello World guide](https://docs.github.com/en/get-started/start-your-journey/hello-world) tours the site.
+
+From then on, a commit is still only local until you send it. Three words cover moving commits around:
+
+- To <Term id="push">push</Term> is to send your commits to the remote. In the panel it's **...** > **Push**.
+- To <Term id="pull">pull</Term> is to fetch new commits from the remote and add them to your branch. In the panel it's **...** > **Pull**.
+- **Sync Changes** does a pull and then a push. It's a button in the Source Control view, and also the circular-arrows icon in the Status Bar next to the branch name. The numbers beside it show how many commits are waiting to go out (up arrow) and how many are waiting to come in (down arrow).
+
+A new branch exists only on your computer, and its button reads **Publish Branch** until you push it for the first time.
+
+To get the code onto another computer, such as a teammate's or a new laptop, <Term id="clone">clone</Term> it: make your own full copy of a repository from a remote, history included. Click **Clone Repository** in the Source Control view when no folder is open, or run **Git: Clone** from the Command Palette, choose **Clone from GitHub**, sign in, and pick the repository. These steps come from VS Code's [remotes guide](https://code.visualstudio.com/docs/sourcecontrol/repos-remotes).
+
+## Two people, one robot
+
+Sooner or later the programmer and the driver both change `main.cpp`. A few habits keep that calm.
+
+Pull before you start, and push when you finish. Starting from a stale copy is how most trouble begins. Give each piece of work its own branch, such as `try-curved-arcade`, and merge when it works. To add a teammate to a personal repository, use **Settings**, then **Collaborators**, on its GitHub page ([GitHub's guide](https://docs.github.com/en/account-and-profile/setting-up-and-managing-your-personal-account-on-github/managing-access-to-your-personal-repositories/inviting-collaborators-to-a-personal-repository)).
+
+If you push and Git refuses because the remote has commits you don't have, pull first, then push. Don't force the push to get past it, because a force push can erase your teammate's work.
+
+Sometimes a pull or a merge hits a <Term id="merge-conflict">merge conflict</Term>: two branches changed the same lines, and Git needs a person to choose. Say you changed the curve exponent on one branch and a teammate changed it on another. Git stops and marks the file:
+
+```
+<<<<<<< HEAD
+double curve = 2.0;
+=======
+double curve = 1.5;
+>>>>>>> try-curved-arcade
+```
+
+Between the first two markers is the current side, the branch you're merging into. Between the last two is the incoming side, the branch you're bringing in. The Source Control view lists these files under **Merge Changes**. Open one and VS Code shows buttons above the conflict: **Accept Current Change**, **Accept Incoming Change**, **Accept Both Changes** and **Compare Changes**. For a harder conflict, right-click the file under Merge Changes and choose **Open in Merge Editor**, which shows both sides and a result, and click **Complete Merge** when every conflict is resolved.
+
+Then read the result. Accepting both sides can leave two definitions of the same thing, and code that compiles may still not do what either of you meant. Build it before you move on. Then stage the resolved files and click Commit to complete the merge. To back out instead, run **Git: Abort Merge** from the Command Palette, which drops the merge along with any resolving you've done. The details are in VS Code's [merge conflicts guide](https://code.visualstudio.com/docs/sourcecontrol/merge-conflicts).
+
+The best defense is talking. Decide who is editing which part of the program, and conflicts get rare.
+
+## Git Bash, and the command line later
+
+Everything above has a text command underneath. The panel runs those commands for you, and the panel and the command line use the same repository, so you can mix them freely. You don't need this section to start. You'll want the commands eventually, because tutorials use them, teammates will paste them, and some tasks, like the revert above, have no button.
+
+On Windows, **Git Bash** is a terminal that comes with [Git for Windows](https://gitforwindows.org/), and VS Code's [terminal profiles](https://code.visualstudio.com/docs/terminal/profiles) can use it as the integrated terminal. On macOS and Linux, the ordinary terminal already works. `git status` and `git log --oneline` are the two to try first, since they show where you are.
+
+| In the panel | At the command line |
+|---|---|
+| Initialize Repository | `git init` |
+| See what changed | `git status`, then `git diff` |
+| + (Stage Changes) | `git add src/main.cpp` |
+| Commit | `git commit -m "Toggle intake with R1"` |
+| Create new branch... | `git switch -c try-curved-arcade` |
+| Git: Merge... | `git merge timed-auton` |
+| Publish Branch, then Push | `git push -u origin try-curved-arcade` |
+| Pull | `git pull` |
+| Undo Last Commit | `git reset --soft HEAD~1` |
+| Discard Changes | `git restore src/main.cpp` |
+| Checkout (Detached) | `git switch --detach <commit-hash>` |
+
+The free Git book is the best next step. Its [first chapter](https://git-scm.com/book/en/v2/Getting-Started-What-is-Git%3F) explains the model behind everything here.
+
+That closes the first robot program, with one problem left over: the timed plan doesn't land in the same place twice. [Sensing the World](../../sensors/why-sensors/) is where the robot learns to measure what actually happened.
+
+<Check prompt="You edited main.cpp for an hour, never committed it, and the robot now drives worse than this morning. Someone says to click Discard Changes. What does that do, and what would you do first if you aren't sure you want the edits gone?">
+Discard Changes puts the file back to its staged or last committed version, and the hour of edits is gone with no copy to recover. If you're unsure, commit first, ideally on a new branch, so the edits become a commit you can return to. Then going back to the version that worked is safe.
+</Check>
+
+<Check prompt="You check out a commit from three weeks ago with Checkout (Detached), find a fix for its drive code, and commit it. Then you switch to main. What have you risked, and what should you have done after the checkout?">
+The new commit belongs to no branch, because the checkout left HEAD detached, so switching to main leaves it hard to find. After the checkout, run Git: Create Branch... to put the work on a named branch before committing.
+</Check>
+
+<Check prompt="Your .gitignore lists bin/. A teammate says to remove the line, because the Brain needs the .bin file. Is that a good reason?">
+No. The Brain needs the file at upload time, and the build makes it fresh from your source each time, so it doesn't need to be in history. Committing it would add a large file that changes on every build and conflicts between teammates, while Git already has the source it's made from.
+</Check>
