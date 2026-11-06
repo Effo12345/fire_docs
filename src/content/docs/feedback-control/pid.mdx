@@ -69,11 +69,13 @@ The danger with I is that this total also grows while the robot is far away and 
 
 ## In code
 
-Here's PID for driving straight, using the [`for` and `while` loops](../../cpp-foundations/arrays-and-loops/) and [functions](../../cpp-foundations/functions/) from C++ Foundations and the [motor groups](../../first-robot-program/inside-a-pros-project/) from your first robot program. `getDriveDistance()` comes from [Motor Encoders](../../sensors/motor-encoders/).
+Here's PID for driving straight, using the [`for` and `while` loops](../../cpp-foundations/arrays-and-loops/) and [functions](../../cpp-foundations/functions/) from C++ Foundations and the [motor groups](../../first-robot-program/inside-a-pros-project/) from your first robot program. `getDriveDistance()` and `resetDriveDistance()` come from [Motor Encoders](../../sensors/motor-encoders/).
 
 ```cpp
 // Drives straight until the robot has gone target inches
 void driveDistance(double target) {
+    resetDriveDistance();
+
     // Output is in millivolts, so 400 here is 0.4 volts per inch
     const double kP = 400.0;
     const double kI = 50.0;
