@@ -1,5 +1,194 @@
 ---
-title: "Why Robots Need Sensors"
+title: Why Robots Need Sensors
+description: What a sensor reading really is, the vocabulary for judging one, and why a robot that can't measure what it did can't be repeatable.
 ---
+import Scene from '../../../components/Scene.astro';
+import Api from '../../../components/Api.astro';
+import Check from '../../../components/Check.astro';
+import ReadTheDocs from '../../../components/ReadTheDocs.astro';
+import Term from '../../../components/Term.astro';
+import T from '../../../components/T.astro';
 
-This page is being written.
+[Your First Autonomous](../../first-robot-program/first-autonomous/#why-the-same-program-lands-in-different-places) ended with a robot that landed somewhere new on every run. The program never looked at where the robot was. It told the motors to run for a while and trusted whatever came out, which is <T id="open-loop">open loop</T>, and the price is poor <T id="repeatability">repeatability</T>.
+
+Change one line of that story. Instead of "drive for a fixed time," say "drive until the wheels have gone 48 inches." Both robots below get the same extra load, which stands in for anything that slows a real robot down, like carrying game pieces.
+
+<Scene name="sensors/timed-vs-measured">
+Drag the load slider. The timed robot was tuned for no load, so it lands short as the load grows, and it can't know. The measured robot keeps finding the line, but it always ends a little past it. The dashed marks show where each one finishes.
+</Scene>
+
+The numbers come from a deliberately simple model, not a real robot, but the pattern is real. The program on the bottom lane works because something reports how far the wheels have turned, and that something is a sensor. The overshoot is real too: the program cuts the power at 48 inches, and the robot keeps rolling. Fixing that takes a controller, which is the job of [Feedback Control](../../feedback-control/closing-the-loop/). A controller can only be as good as the numbers it's given, so this section is about getting those numbers and knowing how far to trust them.
+
+## Sensors and actuators
+
+A <Term id="sensor">sensor</Term> turns something about the world into a number your program can read. An <Term id="actuator">actuator</Term> goes the other way: a number from your program becomes something that happens in the world. Your drive motors are actuators. `move_voltage` hands one a number, and it turns.
+
+Every robot program, from a line-following toy to a competition robot, is a loop between the two. Sensors report, the program decides, actuators act, and the world changes what the sensors report next. Without sensors, the program decides from a plan alone, which is what the timed robot did.
+
+What travels between a sensor and the Brain is a <Term id="signal">signal</Term>: a value that changes over time and carries information. Inside the wire it's usually a voltage. By the time your program sees it, it's a number in a variable.
+
+## What a sensor reading really is
+
+It's tempting to treat `frontDistance.get_distance()` as a window onto the world: ask, and you get the truth. A reading is closer to a note passed from the sensor, and three things happen to it on the way.
+
+**It's old.** A sensor measures at its own pace, called its <Term id="sampling-rate">sampling rate</Term>. Your program asks at its own pace, its <Term id="polling-rate">polling rate</Term>, which is how often the loop calls `get_value()` or its relatives (see <T id="polling">polling</T>). The two aren't locked together. Between samples the sensor has nothing new, so your program holds a number that is as old as the last sample. PROS's ADI documentation says the ADI ports return data at 10 ms intervals. The headers for the rotation sensor and the inertial sensor say their values are copied to the Brain every 10 ms, and that asking for a faster data rate "does not mean that you can poll the sensor's values any faster." So polling faster than that gains nothing, and a loop with `pros::delay(10)` will sometimes see the same value twice. That last part is reasoning from two clocks that drift apart, not something the docs promise.
+
+**It's stepped.** A sensor can only report numbers from a finite list. <Term id="resolution">Resolution</Term> is the smallest change it can report. A change smaller than one step is invisible, and the reading jumps to the next step when enough has changed.
+
+**It's noisy.** <Term id="noise">Noise</Term> is random variation in a reading that has nothing to do with what's being measured. Hold a sensor perfectly still and the numbers still wiggle a little.
+
+<Scene name="sensors/reading-anatomy">
+Press play and watch the red bar, the gap between the world and your program. Then try three things. Raise the time between samples to 0.8 and look for the short spike at 2.6 s. Set it back to 0.1 and push the resolution step up to 2, and see what happens to the slow rise. Last, raise the noise and ask whether a jump in the dots is a real change. The values are made up.
+</Scene>
+
+Each problem has a different fix, and each fix costs something. A short event needs a fast sampling rate, because a spike that falls between two samples is gone for good. A small change needs fine resolution. Noise can be reduced by averaging several readings, but averaging uses older readings, so the result is staler. No setting wins on all three, which is why sensors come in so many kinds and why the rest of this section keeps asking what each one is good at.
+
+## Digital, analog, and where they plug in
+
+A <Term id="digital-signal">digital signal</Term> has two states, high or low, which a program reads as 1 or 0. It suits a question with two answers, like "is the switch pressed?" An <Term id="analog-signal">analog signal</Term> can take any value in a range, like a <T id="voltage">voltage</T> anywhere between 0 and 5 volts. A potentiometer, which makes a voltage that follows an angle, is an analog sensor.
+
+A computer works in whole numbers, so an analog voltage has to be converted first. On the Brain's analog inputs the result is a 12-bit number (see <T id="bit">bits</T>), and 12 bits can hold 2<sup>12</sup> = 4096 different values, so the reading runs from 0 to 4095 across roughly 0 to 5 volts. That works out to about 5 / 4095 = 1.2 millivolts per step. That's the ideal: PROS's ADI tutorial notes real sensors often read closer to 5 to 4090 than the full range, so the usable steps are slightly fewer.
+
+Two kinds of port take sensors:
+
+- <Term id="adi">**ADI**</Term> ports (analog-digital interface) are the eight three-wire ports on the Brain, numbered 1 to 8 or lettered A to H. Switches, potentiometers and shaft encoders plug in here. The Brain does the reading, so what your program gets is raw: 0 or 1, or a count from 0 to 4095.
+- <T id="smart-port">Smart Ports</T> take the sensors that do their own measuring: the rotation sensor, inertial sensor, distance sensor and optical sensor. They send the Brain finished numbers in units like millimeters or centidegrees, and you give each one a port number when you create it in code.
+
+## Accuracy, precision and resolution
+
+Datasheets use three words that people use as if they were one. They're three separate questions about a sensor, and mixing them up leads to trusting the wrong thing.
+
+- <Term id="accuracy">**Accuracy**</Term>: how close readings are to the true value, on average. A sensor that always reads 17 mm short is inaccurate.
+- <Term id="precision">**Precision**</Term>: how close repeated readings are to each other, when the true value hasn't changed. This is the sensor's version of the robot's repeatability.
+- **Resolution**: the smallest step it can report, from the last section.
+
+<Scene name="sensors/accuracy-precision">
+Each dot is one reading of the same true value, the green center. Set the bias to 2 and the spread to 0.1 and you have a sensor that is precise but not accurate. Set the bias to 0 and the spread to 1.2 to get accurate on average, but imprecise. Then raise the resolution step and watch what a coarse sensor does to a small spread.
+</Scene>
+
+At a coarse resolution, readings that really do scatter all land on the same grid point and look perfectly precise. A sensor can seem steady only because it can't see the wobble.
+
+These can also pull against each other the other way: resolution can be much finer than accuracy. VEX's [spec sheet](https://docs.rs-online.com/bd2c/A700000007193336.pdf) for the distance sensor lists a range of 20 mm to 2000 mm and an accuracy of about 15 mm below 200 mm, about 5 percent above. The sensor reports whole millimeters, so a reading of 183 sounds exact, but it could be 15 mm off.
+
+The two failures have different cures. A steady error in accuracy, called bias, can be measured and subtracted. Scatter can only be averaged down, which costs time, as you saw in the last scene. So when you compare sensors, ask which of the three matters for the job.
+
+## Absolute and relative, drift and calibration
+
+Suppose you power the robot on with the arm halfway up. An <Term id="absolute-sensor">absolute sensor</Term> knows its value right away: the potentiometer on the arm makes a voltage that depends on the angle, so it reads the right angle from the first moment. A <Term id="relative-sensor">relative sensor</Term> only knows how much has changed since it started counting. It would say "I've moved 0 degrees," and have no idea the arm is halfway up. Encoders are the common relative sensors, and every wheel encoder you'll meet on [Motor Encoders](../motor-encoders/) is one. A relative sensor needs a known starting point, and finding one is the subject of [Finding a known position](../limit-and-bump-switches/#finding-a-known-position).
+
+Relative sensors have a second weakness. They build their answer by adding small changes together, so every tiny error gets added too. A reading that slowly moves away from the truth even though nothing happened is called <Term id="drift">drift</Term>. Small errors matter less when they're random and cancel, and more when they're all the same sign. Thousands of updates a minute at a tiny consistent error is a lot of error, and the [inertial sensor](../inertial-sensor/#drift) is the clearest example.
+
+The tool against both is <Term id="calibration">calibration</Term>: measuring a sensor against something known, so you can trust its readings or correct them. Calibration comes in two kinds. Some sensors need a start-up routine of their own, like the inertial sensor, which must sit still while it sets its reference. The other kind is a check you do yourself. Push the robot exactly 48 inches along a tape measure, read the code's distance, and compare. If the code says 46, a constant in your code is wrong, and now you know how wrong. You'll do this on [Motor Encoders](../motor-encoders/#from-motor-degrees-to-inches).
+
+## Reading one in code
+
+The running robot already has two ADI sensors: a limit switch on port A and a potentiometer on port B on the arm. Both have <Api sym="adi/get_value" />, which returns a 32-bit <T id="integer">integer</T>. This loop prints both to the Brain screen with <Api sym="llemu/print" />, which was taught in [Printing a value to the Brain screen](../../first-robot-program/inside-a-pros-project/#printing-a-value-to-the-brain-screen). It needs `pros::lcd::initialize()` in `initialize()`, and each line number from 0 to 7 is one row of the screen.
+
+```cpp
+void opcontrol() {
+    while(true) {
+        pros::lcd::print(0, "limit switch: %d", limitSwitch.get_value());
+        pros::lcd::print(1, "arm pot: %d", armPot.get_value());
+
+        pros::delay(10);
+    }
+}
+```
+
+Upload it and move the arm by hand. The potentiometer number should change smoothly through a range of up to 4095, and the switch number should flip between two values when you press it. The `pros::delay(10)` is the same as in every other loop in this guide, and [it's there](../../first-robot-program/driver-control/#why-the-loop-has-a-delay) so other tasks get a turn. It also matches the 10 ms the ADI ports update at, so there's no use in a faster loop.
+
+<ReadTheDocs>
+Open the ADI section of the PROS API docs (<Api sym="adi" label="ADI" />). Find how often ADI sensors return new data, and what range of numbers an analog input gives.
+</ReadTheDocs>
+
+<Check prompt="What do the ADI docs say about how often new data arrives, and what range an analog input gives?">
+The ADI returns data at 10 ms intervals (it's in the notes on the calibrate functions). An analog input's `get_value` gives a 12-bit number, where 0 means nearly 0 V and 4095 means nearly 5 V. Notes like these are where docs keep the details a function's one-line summary leaves out.
+</Check>
+
+## When the sensor isn't there
+
+Sensors get unplugged, cables get pulled, and a port number gets typed wrong. When a PROS call can't reach its sensor, it returns the error value `PROS_ERR` and sets <T id="errno">`errno`</T> to say why, as [the docs guide](../../start-here/how-to-use-this-guide/) described. For functions that return an integer, `PROS_ERR` is 2,147,483,647, the largest value a 32-bit integer can hold. Functions that return a double use `PROS_ERR_F`, which is infinity.
+
+An error return is still just a number, and your code will use it as one unless you check. Here's a loop that drives toward a wall and stops when the distance sensor says something is closer than 300 mm:
+
+```cpp
+void driveToWallNaive() {
+    while(frontDistance.get_distance() > 300) {
+        leftDrive.move_voltage(6000);
+        rightDrive.move_voltage(6000);
+
+        pros::delay(10);
+    }
+
+    leftDrive.move_voltage(0);
+    rightDrive.move_voltage(0);
+}
+```
+
+Unplug the sensor, and `get_distance()` returns about two billion, which is more than 300, every time. The robot reads that as "the wall is very far away" and drives until someone catches it. Here's the same loop that checks first:
+
+```cpp
+void driveToWall() {
+    while(true) {
+        int reading = frontDistance.get_distance();
+
+        // Don't trust a failed read. Say why and stop driving
+        if(reading == PROS_ERR) {
+            pros::lcd::print(0, "distance error %d", errno);
+            break;
+        }
+
+        if(reading <= 300) {
+            break;
+        }
+
+        leftDrive.move_voltage(6000);
+        rightDrive.move_voltage(6000);
+
+        pros::delay(10);
+    }
+
+    leftDrive.move_voltage(0);
+    rightDrive.move_voltage(0);
+}
+```
+
+Both versions still coast past 300 mm, and neither is a good stopping method yet. The point here is the check. Unplug the sensor on a test stand and the screen shows which `errno` your robot got. The C library never resets `errno` after a success, so a number that sits there is only meaningful right after a call that failed.
+
+Not every missing sensor announces itself. An ADI port has no way to tell a switch that is open from a wire that has fallen out, so an unplugged limit switch just reads like an unpressed one. [Limit and Bump Switches](../limit-and-bump-switches/) covers what to do about that. A fast way to learn what a sensor does when it fails is to unplug it on purpose and print.
+
+<ReadTheDocs>
+Open <Api sym="distance/get_distance" /> in the PROS docs. Its return notes list a value other than `PROS_ERR` that means something different. What is it, and when does it come back?
+</ReadTheDocs>
+
+<Check prompt="What other special value can get_distance return, and when?">
+It returns 9999 when the sensor can't detect an object. That isn't `PROS_ERR`, so a check for `PROS_ERR` alone won't catch it, and 9999 mm is bigger than 300, so the wall-stopping loops above would keep driving. [The distance sensor page](../distance-sensor/) deals with this.
+</Check>
+
+## Which sensor answers which question
+
+Each page in this section starts from a question the robot can't yet answer.
+
+| The robot needs to know | Sensor | Page |
+|---|---|---|
+| Has a mechanism reached its end? | Limit or bump switch | [Limit and Bump Switches](../limit-and-bump-switches/) |
+| How far have the wheels turned? | Motor encoder | [Motor Encoders](../motor-encoders/) |
+| How far has a shaft turned, driven or not? | Rotation sensor, shaft encoder | [Rotation Sensors and Shaft Encoders](../rotation-and-shaft-encoders/) |
+| What angle is a short arc at? | Potentiometer | [Potentiometers](../potentiometers/) |
+| Which way is the robot facing? | Inertial sensor | [Inertial Sensor](../inertial-sensor/) |
+| How far is that wall? | Distance sensor | [Distance Sensor](../distance-sensor/) |
+| What color is that? | Optical sensor | [Optical Sensor](../optical-sensor/) |
+
+Start with the simplest sensor there is, one that answers just yes or no, on [Limit and Bump Switches](../limit-and-bump-switches/).
+
+<Check prompt="A loop reads the limit switch with a 200 ms delay, and a game piece presses the switch for 50 ms. What can go wrong, and which of the three ways a reading differs from the world is it?">
+The press can start and end between two readings, so the program never sees it. This is the "old" problem: the polling rate is too slow for the event. A loop with `pros::delay(10)` would catch a 50 ms press.
+</Check>
+
+<Check prompt="A distance sensor is pointed at a wall exactly 500 mm away. Its readings are whole millimeters between 480 and 486, averaging 483. Give its resolution, its precision, and its accuracy. (The numbers are made up.)">
+Resolution is 1 mm, the step between possible readings. Precision is the scatter, about 6 mm between the lowest and highest. Accuracy is the average's distance from the truth, 17 mm short. The bias could be subtracted in code, but the scatter can only be averaged.
+</Check>
+
+<Check prompt="You power on the robot with the arm halfway up. Why can the potentiometer tell you the arm angle right away, but a count of encoder ticks can't?">
+The potentiometer is absolute: its voltage depends on the angle, so the angle is in the signal from the first moment. The encoder is relative: it counts change since it started, so it begins at zero wherever the arm happens to be, until you give it a known starting point.
+</Check>
