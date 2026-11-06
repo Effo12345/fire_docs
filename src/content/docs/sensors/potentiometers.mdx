@@ -24,7 +24,7 @@ Slide the shaft angle and watch the <Hl c="focus">contact</Hl> move along the re
 
 ## From voltage to a number
 
-The Brain can't use "about 2.6 V" directly. An <Term id="adc">ADC</Term>, an analog-to-digital converter, measures the voltage and answers with a whole number. The ADI ports use 12 bits, which gives $2^{12} = 4096$ possible answers, 0 for about 0 V up to 4095 for about 5 V. That's the stepping [Why Sensors](../why-sensors/#what-a-sensor-reading-really-is) described, and here it has a size you can work out. The original potentiometer turns up to 250 degrees, so one count is
+The Brain can't use "about 2.6 V" directly. An <Term id="adc">ADC</Term>, an analog-to-digital converter, measures the voltage and answers with a whole number. The ADI ports use 12 bits, which gives $2^{12} = 4096$ possible answers, 0 for about 0 V up to 4095 for about 5 V. That's the stepping [Why Robots Need Sensors](../why-sensors/#what-a-sensor-reading-really-is) described, and here it has a size you can work out. The original potentiometer turns up to 250 degrees, so one count is
 
 $$
 \frac{250}{4095} \approx 0.061 \text{ degrees}
@@ -98,7 +98,7 @@ Open the ADI group in the PROS C++ API and look at the Potentiometer class. Find
 
 The original potentiometer has hard stops at the ends of its travel, and the [BLRS wiki](https://wiki.purduesigbots.com/vex-electronics/vex-sensors/3-pin-adi-sensors/potentiometer) warns that turning it past them can break it. Build the arm's mechanical stops to engage before the potentiometer's own, so that at both of the arm's stops the reading is still away from 0 and 4095.
 
-The V2 turns continuously, but its resistor can't cover the whole circle, so somewhere in each turn there should be a <Term id="dead-zone">dead zone</Term>: a stretch where the output isn't a useful angle. That's an inference from how it is built, and no published size for the gap turned up, so the scene doesn't draw one. Measure yours: turn the shaft slowly through a full turn and print `get_value()`. A flat stretch or a sudden jump marks the gap. Mount the part so the arm's whole swing stays well away from it.
+The V2 turns continuously, but its resistor can't cover the whole circle, so somewhere in each turn there should be a <Term id="dead-zone">dead zone</Term>: a stretch where the output isn't a useful angle. That's an inference from how it is built, and the sources linked here give no size for the gap, so the scene doesn't draw one. Measure yours: turn the shaft slowly through a full turn and print `get_value()`. A flat stretch or a sudden jump marks the gap. Mount the part so the arm's whole swing stays well away from it.
 
 A potentiometer is the wrong tool for a mechanism that spins continuously, like a wheel, because its travel is under one turn. It also gives no velocity unless you compute it, and the ADI port refreshes only every 10 ms (the header says so). For an arm that swings through a small arc, though, it gives an angle with no counting, no reset and no homing.
 

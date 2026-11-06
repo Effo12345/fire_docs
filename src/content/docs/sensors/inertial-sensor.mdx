@@ -169,7 +169,7 @@ One more convention: the IMU counts clockwise as positive, while math class meas
 
 ## Drift
 
-Every thin slice carries a tiny error. A gyroscope that reads 0.1 degrees per second while the robot sits still is wrong by a hair at any instant, but add that hair up for 60 seconds and the heading is off by 6 degrees. That's <Term id="integration-drift">integration drift</Term>: a small error in a rate, added up over time, becomes a large error in the angle. It's one case of the general [drift](../why-sensors/#absolute-and-relative-drift-and-calibration) from Why Sensors.
+Every thin slice carries a tiny error. A gyroscope that reads 0.1 degrees per second while the robot sits still is wrong by a hair at any instant, but add that hair up for 60 seconds and the heading is off by 6 degrees. That's <Term id="integration-drift">integration drift</Term>: a small error in a rate, added up over time, becomes a large error in the angle. It's one case of the general [drift](../why-sensors/#absolute-and-relative-drift-and-calibration) from Why Robots Need Sensors.
 
 <Scene name="sensors/gyro-drift">
 The robot sits still for a minute, sped up. With no rate error and no noise, the heading stays flat. Raise the rate error and the added-up heading leans away at a steady slope. Raise the noise instead and it wanders back and forth. The slider numbers are made up for the picture. They are not the sensor's real errors.

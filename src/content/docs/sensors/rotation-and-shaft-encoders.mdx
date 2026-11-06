@@ -16,7 +16,7 @@ The same sensors measure an arm that a rubber band lifts, a shaft in the middle 
 
 ## Inside the optical shaft encoder
 
-The older of the two is the **shaft encoder**, which plugs into two <T id="adi">ADI</T> ports. It's an <Term id="optical-encoder">optical encoder</Term>: a wheel full of slots turns with the shaft, and a light on one side shines through to a light sensor on the other side. When a slot lines up, light gets through. When the solid part lines up, it doesn't. The [BLRS wiki](https://wiki.purduesigbots.com/vex-electronics/vex-sensors/3-pin-adi-sensors/encoder) describes the part this way, with an infrared light and sensor on opposite sides of the slotted wheel.
+The older of the two is the **shaft encoder**, which plugs into two <T id="adi">ADI</T> ports. It's an <Term id="optical-encoder">optical encoder</Term>: a wheel full of slots turns with the shaft, and a light on one side shines through to a light sensor on the other side. When a slot lines up, light gets through. When the solid part lines up, it doesn't. The [BLRS wiki](https://wiki.purduesigbots.com/vex-electronics/vex-sensors/3-pin-adi-sensors/encoder) describes the part this way, with a sensor on opposite sides of the slotted wheel.
 
 Counting light and dark, one after the other, gives you each <T id="tick">tick</T>. But one stream of ticks has a flaw: when it ticks, you can't tell which way the shaft turned. A shaft rocking back and forth by one slot looks the same as a shaft turning steadily forward by one slot. That's why the encoder has two signal wires and not one.
 
@@ -32,7 +32,7 @@ The disk has 12 slots only so the picture is readable. Play it, and notice that 
 
 The decoder only has to remember the previous pair of states. Going forward, the pair of readings (A, B) cycles through 00, 10, 11, 01 and back to 00. If the new pair is the next one in that cycle, count +1. If it's the previous one, count -1. That's a rule a chip can follow with no thinking, and it never confuses rocking with turning.
 
-Look at how often the count changes. Each channel changes twice per slot (going dark and coming back), and there are two channels, so the count changes four times per slot. That's why the scene's count is always about four times the number of slots passed. The part's own numbers fit this pattern, though the pieces disagree on the surface. The VEX documentation describes a wheel with 90 slots. The BLRS wiki says a full turn is 360 clicks, "not 90", as the info sheet says. Four counts for each of 90 slots is exactly 360. That's the most likely reading of both sources, but it's a reading of them, and neither one says so in those words.
+Look at how often the count changes. Each channel changes twice per slot (going dark and coming back), and there are two channels, so the count changes four times per slot. That's why the scene's count is always about four times the number of slots passed. The part's own numbers fit this pattern, though the pieces disagree on the surface. [VEX's article on the part](https://kb.vex.com/hc/en-us/articles/360039512851-Using-the-V5-3-Wire-Optical-Shaft-Encoder) describes a wheel with 90 slots. The BLRS wiki says a full turn is 360 clicks, "not 90", as the info sheet says. Four counts for each of 90 slots is exactly 360. That's the most likely reading of both sources, but it's a reading of them, and neither one says so in those words.
 
 The PROS header agrees on 360 ticks per revolution, so one tick is one degree of shaft rotation. That is small enough for most uses, and it isn't a position with decimals: you get whole degrees.
 
@@ -45,7 +45,7 @@ An encoder isn't on the running robot, so this example declares its own, labeled
 pros::adi::Encoder shaftEncoder('C', 'D', false);
 ```
 
-The constructor <Api sym="adi/Encoder" /> takes the "top" wire first, which the header defines as the wire on the side with the removable cover facing up, then the bottom wire. The last argument, `reversed`, flips the sign, which is the same as swapping the two wires in the scene. Whether the pair of ports has to be next to each other isn't something the PROS header says, so check the VEX wiring documentation for your Brain before you pick ports.
+The constructor <Api sym="adi/Encoder" /> takes the "top" wire first, which the header defines as the wire on the side with the removable cover facing up, then the bottom wire. The last argument, `reversed`, flips the sign, which is the same as swapping the two wires in the scene. The two ports can't be just any pair. The [PROS kernel source](https://github.com/purduesigbots/pros/blob/develop-pros-4/src/devices/vdml_ext_adi.c) rejects a pair unless the ports are next to each other and the lower one is A, C, E or G, which the header doesn't mention. So C and D work, and B and C don't.
 
 Reading it takes two functions. <Api sym="adi/get_value" /> returns the count, and <Api sym="adi/reset" /> sets it back to zero:
 
@@ -69,7 +69,7 @@ The encoder is a <T id="relative-sensor">relative sensor</T>. BLRS says its coun
 
 The **rotation sensor** takes a different approach. It plugs into a Smart Port, so unlike an ADI part, it does its own measuring and sends finished numbers. There are no slots. According to the BLRS wiki, it's a <Term id="magnetic-encoder">magnetic encoder</Term>: a Hall effect sensor, a chip whose output changes with a magnetic field, measures the field of two magnets on the shaft, and the field tells it the shaft's angle. Another chip counts the full turns. That wiki is third-party, and VEX doesn't describe the inside in detail, so treat this as a good description and not a spec.
 
-The magnetic design has a consequence you can use. The sensor reads the *direction of a field*, which depends on where the shaft is right now, not on anything counted since startup. So the angle is always known the moment power returns, and the angle survives power-off (VEX's API documentation says so). A sensor like that is an <Term id="absolute-encoder">absolute encoder</Term>, a close relative of the <T id="absolute-sensor">absolute sensor</T> idea from [Why Sensors](../why-sensors/).
+The magnetic design has a consequence you can use. The sensor reads the *direction of a field*, which depends on where the shaft is right now, not on anything counted since startup. So the angle is always known the moment power returns, and the angle survives power-off (VEX's API documentation says so). A sensor like that is an <Term id="absolute-encoder">absolute encoder</Term>, a close relative of the <T id="absolute-sensor">absolute sensor</T> idea from [Why Robots Need Sensors](../why-sensors/).
 
 The sensor measures in <Term id="centidegree">centidegrees</Term>: hundredths of a degree. One full turn is 36,000 centidegrees. This is a unit the sensor *reports* in, not a promise about how finely it can measure. Writing a number with extra digits doesn't make it more precise, as [Accuracy, Precision and Resolution](../why-sensors/#accuracy-precision-and-resolution) said. VEX's product page lists a precision of "0.088", with no unit shown, which would likely mean degrees (about 9 centidegrees). That is unconfirmed, so measure your own sensor if it matters: turn the shaft slowly by hand and watch how the reading steps.
 
@@ -150,7 +150,7 @@ double getForwardInches() {
 
 A position of 125,000 centidegrees is 3.47 turns, which is about 30.0 inches. The division by `36000.0` has a decimal point on purpose: `forwardTracker.get_position() / 36000` would be <T id="integer-division">integer division</T> ([explained here](../../cpp-foundations/math-and-decisions/#the-integer-division-surprise)) and throw away every partial turn.
 
-If the sensor fails, <Api sym="rotation/get_position" /> returns `PROS_ERR` (2,147,483,647) and sets `errno`, the same pattern [Why Sensors](../why-sensors/) showed. Run that through the function above and a pulled cable reads as over 500,000 inches. Check for the error first, the way Why Sensors did:
+If the sensor fails, <Api sym="rotation/get_position" /> returns `PROS_ERR` (2,147,483,647) and sets `errno`, the same pattern [Why Robots Need Sensors](../why-sensors/) showed. Run that through the function above and a pulled cable reads as over 500,000 inches. Check for the error first, the way Why Robots Need Sensors did:
 
 ```cpp withprev
 void printForwardInches() {

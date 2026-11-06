@@ -9,7 +9,7 @@ import ReadTheDocs from '../../../components/ReadTheDocs.astro';
 import Term from '../../../components/Term.astro';
 import T from '../../../components/T.astro';
 
-[Why Sensors](../why-sensors/) ended with the idea that every reading is a number that is a little stale, a little stepped and a little noisy. The simplest sensor there is gives you the least number you can get: one <T id="bit">bit</T>. Something is touching it, or nothing is.
+[Why Robots Need Sensors](../why-sensors/) ended with the idea that every reading is a number that is a little stale, a little stepped and a little noisy. The simplest sensor there is gives you the least number you can get: one <T id="bit">bit</T>. Something is touching it, or nothing is.
 
 That sounds too small to matter, and it turns out to be one of the most useful sensors on a robot. A switch can't drift, it needs no calibration, and it answers a question no other sensor can answer as cheaply: *has this mechanism reached the end of its travel?* The last section of this page uses that answer to give a sensor that has no sense of position a true zero to count from.
 
@@ -39,7 +39,7 @@ Press and release the switch in the scene and watch the wire.
 Slide the switch to pressed. The lever touches the lower contact, the wire is tied to ground, and its level drops. Release it and the resistor pulls the wire back up.
 </Scene>
 
-So the wire goes **low** when the switch is pressed, which is the opposite of what you might guess. VEX's knowledge base describes the V5 switches this way (it calls the signal "active digital low"), and so does the BLRS wiki. The older VEX Cortex documentation describes a weak pull-up on its inputs, and the V5 port behaves consistently with one, but VEX doesn't state that for the V5 in anything we could read, so treat it as an inference from the behavior.
+So the wire goes **low** when the switch is pressed, which is the opposite of what you might guess. VEX's knowledge base describes the V5 switches this way (it calls the signal "active digital low"), and so does the BLRS wiki. The older VEX Cortex documentation describes a weak pull-up on its inputs, and the V5 port behaves consistently with one, but the sources linked here don't state that for the V5, so treat it as an inference from the behavior.
 
 ## Reading it in code
 
@@ -93,7 +93,7 @@ The two sources behind the "low means pressed" claim are the [VEX knowledge base
 
 ## Bounce
 
-A rising edge is only as good as the signal under it, and a mechanical switch makes a messy signal. When the two contacts slam together, they don't stick on the first touch. They spring apart and touch again several times, for a short moment, before they settle. That chatter is called <Term id="contact-bounce">contact bounce</Term>, and every mechanical switch has it. There's no published bounce time for the V5 switches that we could find, so the times in the next scene are illustrative: change them and see what happens, and don't read them as specs.
+A rising edge is only as good as the signal under it, and a mechanical switch makes a messy signal. When the two contacts slam together, they don't stick on the first touch. They spring apart and touch again several times, for a short moment, before they settle. That chatter is called <Term id="contact-bounce">contact bounce</Term>, and every mechanical switch has it. The sources linked here give no bounce time for the V5 switches, so the times in the next scene are illustrative: change them and see what happens, and don't read them as specs.
 
 Your loop doesn't see the contact directly. The ADI port hands your program a new value every 10 milliseconds (the header says so), so your `pros::delay(10)` loop checks the switch about every 10 ms. Chatter that is shorter than that can slip between two checks, and chatter that is longer than a check can land on one.
 

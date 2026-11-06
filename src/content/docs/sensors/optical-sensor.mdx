@@ -172,7 +172,7 @@ It costs you color. While gestures are on, hue, saturation, brightness and proxi
 
 ## What to do with the numbers
 
-You can read what the robot's motors, shafts, heading, wall distance and piece colors are doing now, and every example in this section did something blunt with the number: an `if` and a fixed voltage. Those are the programs that overshoot, coast and chatter. What a robot does with a measurement so that it arrives where it should, without a person steering, is the next section, starting at [Why Control Theory](../../feedback-control/why-control-theory/).
+You can read what the robot's motors, shafts, heading, wall distance and piece colors are doing now, and every example in this section did something blunt with the number: an `if` and a fixed voltage. Those are the programs that overshoot, coast and chatter. What a robot does with a measurement so that it arrives where it should, without a person steering, is the next section, starting at [Why Control Theory Matters](../../feedback-control/why-control-theory/).
 
 <Check prompt="A green piece reads a hue between 100 and 140. Which of `hue > 100.0 && hue < 140.0` and `hue > 100.0 || hue < 140.0` is right, and what would the wrong one do?">
 The `&&` one. The band doesn't cross 0, so a hue has to be above 100 and below 140 at once. With `||`, every hue passes, since any number is either above 100 or below 140, so every piece would count as green.
