@@ -60,5 +60,7 @@
   {"id": "push", "term": "push", "definition": "Sending your commits to a remote.", "page": "first-robot-program/git-basics"},
   {"id": "pull", "term": "pull", "definition": "Getting new commits from a remote and adding them to your copy.", "page": "first-robot-program/git-basics"},
   {"id": "clone", "term": "clone", "definition": "Making your own full copy of a repository from a remote.", "page": "first-robot-program/git-basics"},
+  {"id": "revert-git", "term": "revert", "definition": "A new commit that cancels the effect of an earlier commit, leaving the history intact.", "page": "first-robot-program/git-basics"},
+  {"id": "detached-head", "term": "detached HEAD", "definition": "The state where your files sit on a commit that no branch points to, so new commits belong to no branch.", "page": "first-robot-program/git-basics"},
   {"id": "gitignore", "term": ".gitignore", "definition": "A file listing what Git should not track, such as build output.", "page": "first-robot-program/git-basics"}
 ]
