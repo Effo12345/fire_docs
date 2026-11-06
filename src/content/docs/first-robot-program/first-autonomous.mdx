@@ -1,5 +1,173 @@
 ---
 title: "Your First Autonomous"
+description: Writing a robot's plan as timed moves, why the program waits while the wheels keep turning, and why the same plan lands somewhere different every run.
 ---
+import Scene from '../../../components/Scene.astro';
+import Api from '../../../components/Api.astro';
+import Check from '../../../components/Check.astro';
+import ReadTheDocs from '../../../components/ReadTheDocs.astro';
+import Hl from '../../../components/Hl.astro';
+import Term from '../../../components/Term.astro';
+import T from '../../../components/T.astro';
 
-This page is being written.
+[Driver Control](../driver-control/) ended with a driver who fixes every mistake by eye. The first 15 seconds of a match take the driver away, and the robot has to carry out a plan alone. That plan is the <Term id="autonomous-routine">autonomous routine</Term>: a sequence of actions the program runs from start to finish with nobody holding a controller. It lives in the `autonomous` function you met in [Inside a PROS Project](../inside-a-pros-project/#main-cpp-and-the-functions-you-never-call), which is still empty.
+
+This page fills it in the simplest way there is, and the simplest way works. You'll watch it work, then watch it stop working, and the reason it stops is what the next section of the guide is for.
+
+## A plan made of timed moves
+
+You already have the two tools you need. <Api sym="motors/move_voltage" /> sets how hard the motors push, and <Api sym="rtos/delay" /> waits. Set the power, wait a while, stop. If you know how fast the robot goes, a wait is a distance.
+
+How fast is that? The drive motors have blue cartridges (600 RPM) and 36:48 gearing, so the wheels turn at 450 RPM. A 3.25 inch wheel rolls $\pi \times 3.25 \approx 10.2$ inches per turn, and 450 RPM is 7.5 turns a second:
+
+$$
+7.5 \times 10.2 \approx 76 \text{ inches per second}
+$$
+
+That's the top speed with nothing in the way. `move_voltage(6000)` is half of the 12000 mV maximum, so half power should give about 38 inches per second, if speed grows in proportion to voltage. It only roughly does, so take 38 as an estimate. Driving for 1000 ms at that power should cover something near 38 inches.
+
+Every move in a routine is the same three steps, so write them once. Turning is the same idea with the two sides pushed in opposite directions:
+
+```cpp
+void driveFor(int voltage, int ms) {
+    leftDrive.move_voltage(voltage);
+    rightDrive.move_voltage(voltage);
+    pros::delay(ms);
+
+    leftDrive.brake();
+    rightDrive.brake();
+
+    // Let it finish rolling before the next move
+    pros::delay(150);
+}
+
+// Positive voltage turns right
+void turnFor(int voltage, int ms) {
+    leftDrive.move_voltage(voltage);
+    rightDrive.move_voltage(-voltage);
+    pros::delay(ms);
+
+    leftDrive.brake();
+    rightDrive.brake();
+
+    pros::delay(150);
+}
+```
+
+The <Api sym="motors/brake" /> lines use the brake mode you set in `initialize`, as [Inside a PROS Project](../inside-a-pros-project/#what-happens-when-you-stop) taught. Now the routine reads like the plan it is:
+
+```cpp withprev
+void autonomous() {
+    driveFor(6000, 1000);
+    turnFor(4000, 460);
+
+    intake.move(127);
+    driveFor(6000, 1000);
+    intake.brake();
+}
+```
+
+Drive forward, turn right about 90 degrees, then drive forward again with the intake running (<Api sym="motors/move" /> takes -127 to 127). Numbers like 1000 and 460 are found by trying: run it, see that the turn came up short, add a bit, run again. Rewrite the times until the robot ends where you want it. The last section of this page is about what that approach can't do.
+
+## Why the motors keep running during a delay
+
+Look again at `driveFor`. The two `move_voltage` lines run instantly, and the wheels begin to turn. Then `pros::delay(ms)` runs, and for a full second the program does nothing at all. How does the robot keep driving?
+
+The motors don't need the program to keep them going. A motor holds the last command it was given until it gets a new one. The program said "6000 millivolts" and moved on, and the motor kept pushing. `pros::delay` is a <Term id="blocking-call">blocking call</Term>: the function doesn't return until its wait is over, so no line after it can run in the meantime. The program is asleep, and the wheels are not.
+
+Step through it. Watch the highlighted line, and watch the `wheels` box.
+
+<Scene name="first-robot-program/auton-steps">
+The motor lines finish in an instant. The <Hl c="focus">highlighted line</Hl> sits on `pros::delay` while the wheels stay on, and only the brake lines change that.
+</Scene>
+
+Two things follow. First, anything you want to happen during a move has to be started before the delay. That's why `intake.move(127)` sits above the second `driveFor`: the intake starts, the drive runs for a second, and the intake keeps running through all of it. Second, a motor never stops by itself. Without the brake lines, the drive would carry on into the next move at whatever the last command was. The routine controls the robot only at the moments it writes a command.
+
+A sleeping task isn't a frozen processor. While `autonomous` waits, the kernel runs other <T id="task">tasks</T>, which is how the Brain keeps doing everything else. [Doing Two Things at Once](../../seeing-inside/tasks/) draws it.
+
+## Testing without a competition switch
+
+At a competition, the field starts `autonomous` for you. At a desk, nobody does. As the [match timeline](../inside-a-pros-project/#when-each-function-runs) showed, with no competition control `opcontrol` starts right after `initialize`, and `autonomous` never runs.
+
+But `autonomous` is a function, and a function can be called. Put a button in `opcontrol` that runs it:
+
+```cpp withprev
+void opcontrol() {
+    while(true) {
+        // Test button: runs the whole routine, then returns here
+        if(master.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_A)) {
+            autonomous();
+        }
+
+        // ...the arcade drive and intake code from Driver Control...
+
+        pros::delay(10);
+    }
+}
+```
+
+<Api sym="misc/get_digital_new_press" /> gives one result per press, as [Driver Control](../driver-control/#holding-versus-pressing) explained. With `get_digital`, holding A would restart the routine the moment it ended.
+
+While the routine runs, `opcontrol` is stuck inside that call, so the sticks are ignored for the three seconds or so it takes. Set the robot on its starting spot, press A, and stay clear of it. If the robot heads somewhere it shouldn't, the Stop button in the PROS sidebar's Quick Actions ends the program, so keep the laptop in reach.
+
+Put the robot on exactly the same spot every time you test. The rest of the page is about why that isn't enough.
+
+## Why the same program lands in different places
+
+It works. Run it with the robot on its marked spot, and it drives, turns and finishes where you tuned it. Run it again. Close, but not the same. Twenty runs later, there's a little cloud of finishing spots instead of a point.
+
+A plan that only says "6000 mV for 1000 ms" never learns what the robot did. Controlling something without measuring the result is <Term id="open-loop">open loop</Term>, the opposite of a <T id="closed-loop">closed loop</T>. The program sends commands and hopes. The position it ends with isn't measured but worked out from the commands and the clock. Estimating where you are by adding up speed, direction and time, without checking against anything outside, is <Term id="dead-reckoning">dead reckoning</Term>, the method a ship's navigator used with a clock and a compass. It's only as good as the speeds you assumed.
+
+How closely a robot lands in the same place when it runs the same routine again is its <Term id="repeatability">repeatability</Term>. Open-loop timed moves have poor repeatability, and the scene shows why. It runs the routine above in a simple model: the green dashed path is where the routine landed on the day you tuned the times, the blue line is a run under the conditions you choose, and the faint lines are five more runs of the same program on other days.
+
+<Scene name="first-robot-program/timed-drift">
+A simplified model with illustrative numbers, running the routine above. <Hl c="target">Green dashes</Hl> are the tuned run, <Hl c="value">blue</Hl> is this run, and the <Hl c="error">red line</Hl> is how far it missed. Change one slider at a time. With the sliders at their starting values, the blue run sits on the green one.
+</Scene>
+
+Try the sliders in this order.
+
+**Starting angle.** Set it to 6 degrees and leave everything else alone. The robot starts a little crooked, and nothing in the program knows. After the first 35 inch drive it's about 3.7 inches off to the side. The turn is relative, so it keeps the 6 degrees, and the second drive carries that error further. The rule of thumb is that each degree of heading error moves you about 1.7 inches sideways per 100 inches driven. A degree is hard to see on a tile and impossible to see from across the field. Error that grows with distance is why long moves are worse than short ones.
+
+**Floor grip.** Slide it down and watch the blue run change. A robot can't reach full speed the instant a motor turns on. The wheels have to grip the tile, and on a slick floor they spin or slide before they catch, so the first leg comes up shorter. When the program says "stop", the robot doesn't stop at once either. It keeps rolling a bit, and how much depends on its speed, its weight and how well the wheels grip. Slide grip up and look at the turn: in this model a grippier floor makes it go farther, because the robot spins up faster. Times tuned on one surface are tuned for that surface, and a dusty practice floor and a clean competition tile are not the same.
+
+**Speed lost.** This slider takes a percentage off the robot's speed for the whole run. It is not a battery slider, and the reason is worth a minute. VEX's [article on V5 motor performance](https://kb.vex.com/hc/en-us/articles/360044325872-Understanding-V5-Smart-Motor-11W-Performance) says the motor runs below the battery's lowest voltage and controls its output to within about 1 percent, so a low battery should not slow it the way it slowed older motors. The [BLRS wiki](https://wiki.purduesigbots.com/vex-electronics/vex-electronics/motors) lists the same thing: 100 percent power output on a low battery. So don't tell yourself that a tired battery is why the robot came up short. Check it on your own robot before you rely on either claim, and see that your battery is charged anyway.
+
+Heat is documented. The VEX article says the motor watches its own temperature and, in steps, cuts the current it will allow: to 50, 25, 12.5 and finally 0 percent. A motor that has been working hard can deliver less than a cool one. The PROS motor documentation lets your code watch for this with <Api sym="motors/get_temperature" /> and <Api sym="motors/is_over_temp" />, and it gives the default current limit as 2500 mA, which <Api sym="motors/set_current_limit" /> can lower. Load matters too: a robot carrying game pieces, or pushing something, has more to move than an empty one. The slider doesn't claim to separate these causes or say what each costs. It stands in for "the motors gave less today than on tuning day", and the model assumes speed falls in a straight line with it. Real motors and floors are messier than that.
+
+**Day-to-day variation.** This one scales how much the conditions wander between runs, and the five faint paths scatter accordingly. The scene prints the widest gap among the six end points. Even if you could hold every other slider at the tuned values, the real world doesn't hold still, and that wandering is the cloud from the start of this section.
+
+Nothing here is a bug in the code. Every number in `autonomous` was right for one set of conditions, and the conditions changed. Each effect is small, a few inches in this model. Together, at the slider extremes, the routine ends more than a foot from where it ended on tuning day, and the program has no idea.
+
+## What teams still do with timed moves
+
+If timed moves are this shaky, why does every team write them? For short moves they are fine. A 6 inch nudge has little room to go wrong, because the errors above grow with distance and time. Teams also use them where the exact distance doesn't matter:
+
+- **Pushing into something.** Drive forward into a wall or a goal for a fixed time, longer than needed. Whether the robot arrived early or late doesn't matter, because the obstacle stops it. The wall does the measuring.
+- **Squaring up.** Driving into a wall with both sides and holding there straightens the robot, which removes the starting angle error from the scene. Starting a move from that known position is a common reset.
+- **A time limit as a backup.** Later, moves will end when a sensor says so. A time limit on top keeps the robot from driving forever if the sensor never triggers.
+
+All three use a timed move for a job where the answer comes from outside the program.
+
+## Where this leaves the program
+
+`main.cpp` now has an `opcontrol` with a test button, an `autonomous` that drives, turns and drives again, and the two helpers. [Git Basics](../git-basics/) is next, because there is now a program worth saving. The bigger lesson is what the scene showed: the routine has no way to check itself. To fix that, the robot has to measure what it actually did and compare it to what it meant to do. That's what [Why Sensors](../../sensors/why-sensors/) starts.
+
+<ReadTheDocs>
+Open <Api sym="motors/set_current_limit" /> and read its example. What is the default current limit the comment names, and what does it say the motor does when it reaches the limit?
+</ReadTheDocs>
+
+<Check prompt="You want the robot to drive 24 inches at 6000 mV. About how many milliseconds should you ask for to start with, and why will you probably have to adjust it?">
+At half power the robot goes about 38 inches per second, so 24 inches takes about 24 / 38 = 0.63 seconds, or 630 ms. You'll adjust it because the robot needs a moment to get up to speed and a moment to stop, so the real distance isn't speed times time, and it changes with the floor and the load.
+</Check>
+
+<Check prompt="A routine starts with the robot 2 degrees off, and the first drive is 48 inches. About how far to the side does it end up, and would a 12 inch drive have the same error?">
+Each degree gives about 1.7 inches sideways per 100 inches, so 2 degrees over 48 inches is about 2 × 1.7 × 0.48, or 1.6 inches. A 12 inch drive would be off by only about 0.4 inches. The error grows with distance.
+</Check>
+
+<Check prompt="In driveFor, the lines that set the motor voltage run, and the next line is pros::delay(1000). A friend says the robot isn't moving because the program is waiting. What's wrong with that?">
+The motors keep their last command while the program waits, so the wheels turn during the whole delay. The delay only stops the program from running its next line. Nothing changes the motors again until the brake lines run.
+</Check>
+
+<Check prompt="Why is pushing the robot into a wall for a fixed time more repeatable than driving 40 inches for a fixed time?">
+The wall decides where the robot stops, so how fast it went or how long it took matters much less, as long as the time is enough to reach the wall. The 40 inch drive has no outside check, so every small error in speed and starting angle ends up in the final position.
+</Check>
