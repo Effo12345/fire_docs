@@ -1,5 +1,303 @@
 ---
-title: "Pointers and References"
+title: Pointers and References
+description: Treating an address as a value, so a function can reach the caller's own variable, and where memory comes from when the stack isn't enough.
 ---
+import Scene from '../../../components/Scene.astro';
+import Check from '../../../components/Check.astro';
+import ReadTheDocs from '../../../components/ReadTheDocs.astro';
+import Term from '../../../components/Term.astro';
+import T from '../../../components/T.astro';
 
-This page is being written.
+Last page ended on a function that doesn't work:
+
+```cpp
+void addPoints(int points) {
+    points = points + 5;
+}
+```
+
+Called as `addPoints(score)` with `int score = 10`, it leaves `score` at 10. The function added 5 to a copy and threw the copy away. To change the caller's variable, the function can't be handed the value in the box. It has to be handed the box.
+
+You already know how to find a box without its name. Every byte in RAM has an <T id="address">address</T>, a number, as [Inside a Computer](../../start-here/inside-a-computer/) showed. A number is something a function can receive. This page is about treating addresses as values you can store, pass around and follow, and about the friendlier tool C++ gives you for the same job.
+
+## An address is just a number
+
+Put `&` in front of a variable and you get its address. This is the <Term id="address-of">address-of operator</Term>. A variable that holds an address is a <Term id="pointer">pointer</Term>.
+
+```cpp
+#include <iostream>
+
+int main() {
+    int score = 10;
+    int* p = &score;
+
+    std::cout << p << "\n";
+
+    return 0;
+}
+```
+
+`&score` is where the box named `score` lives. `int*` is the type "pointer to int", and `p` is a new box whose contents are that address. On my laptop this printed `0x7ffdbb101290`, and it prints something different on other runs and other machines. The `0x` marks <T id="hexadecimal">hex</T>. What matters is that it's an ordinary number, one that happens to be the name of a place.
+
+The `int` in `int*` isn't decoration. An address alone says where a box starts, not how big it is or how to read the bytes. The type records that, so `int*` means "four bytes from here, read as a whole number", and a `double*` would read eight. The pointer's own size depends on the machine: 8 bytes on a 64-bit laptop and 4 bytes on the V5 Brain.
+
+## Following a pointer
+
+Holding an address is only useful if you can go there. Putting `*` in front of a pointer does that: it means "the box at this address". Going to the address is called to <Term id="dereference">dereference</Term> the pointer, and the result can be read or written like any variable.
+
+<Scene name="cpp-foundations/pointer-boxes">
+Step to line 3 and ask which variable name the line uses. Then step to the last line and notice what actually changed in memory.
+</Scene>
+
+`*p = 7;` never mentions `score`, and `score` still changes. The arrow in the picture isn't stored anywhere. It's a drawing of the fact that `p` holds 100. Because a pointer is itself a variable, `p = &other;` is an ordinary assignment, and afterward `*p` means a different box.
+
+The `*` means two things, depending on where it stands. In a declaration, `int* p` is part of a type: `p` is a pointer to an int. In an expression, `*p` is an operator: follow the pointer. There's one trap. The `*` belongs to the variable and not the type, so `int* a, b;` makes `a` a pointer and `b` a plain `int`. Declare one variable per line and it never comes up.
+
+The learncpp article on [introduction to pointers](https://www.learncpp.com/cpp-tutorial/introduction-to-pointers/) goes through the syntax, and cppreference has the full rules on [pointer declarations](https://en.cppreference.com/cpp/language/pointer).
+
+## Pointers that point nowhere
+
+A pointer has to hold some number. Declare one and don't fill it, and it holds leftover bytes, the same [uninitialized junk](../variables-types-scope/#reading-uninitialized-memory) any variable starts with. Follow it and you read or write whichever box that junk number happens to name. If the number names a box that belongs to another variable, nothing crashes, and your code silently corrupts it: the same kind of damage as [writing past the end of an array](../arrays-and-loops/#past-the-end-of-an-array). If it names memory the program has no right to use, the machine objects.
+
+C++ has a value that means "no box": `nullptr`. A pointer holding it is a <Term id="null-pointer">null pointer</Term>. In practice it is the address 0, which is never a valid place for a variable, so it can safely mean "nothing here". Give a pointer `nullptr` whenever it has nothing to point at yet, and check before following:
+
+```cpp
+int* p = nullptr;
+
+if(p != nullptr) {
+    *p = 7;
+}
+```
+
+Following a null pointer is *undefined behavior*, the same promise-nothing category as the signed overflow on the first page. On a laptop the operating system usually notices and kills the program, which is called a <Term id="segmentation-fault">segmentation fault</Term>. That's not a guarantee, because the compiler is allowed to assume it never occurs. The PROS headers don't say what the V5 Brain does, so treat it as a crash or worse, and aim not to find out. The next two ideas are mostly ways to keep this bug out of your programs.
+
+## References: a second name
+
+A pointer is a second box holding an address. Often you don't want a second box. You want a second *name* for the box you already have. That is a <Term id="reference">reference</Term>, declared with `&` after the type.
+
+<Scene name="cpp-foundations/reference-alias">
+Compare lines 2 and 3. One makes a new label, and the other makes a new box. After line 4, check which names changed.
+</Scene>
+
+```cpp
+int score = 10;
+int& r = score;
+
+r = 20;
+std::cout << score << "\n";    // 20
+```
+
+`r` and `score` are the same box under two names, so `&r == &score`. The `&` here is part of the type, just as `*` was in `int* p`, and not the address-of operator. After that a reference needs no symbol at all: you write `r` the way you'd write the variable. Three rules follow from "it is just another name".
+
+It has to be given a box when it's created, so `int& z;` is an error. It can never be pointed somewhere else later, since `r = other;` copies `other`'s value into the box `r` names and leaves `r` naming the same box. And there is no null reference, because a name must name something. Together these remove most of the ways a pointer goes wrong.
+
+For a function parameter the compiler usually passes an address behind the scenes, and for a local alias it often emits nothing at all. The language only promises the alias. The learncpp article on [lvalue references](https://www.learncpp.com/cpp-tutorial/lvalue-references/) adds the rules about what a reference can be bound to.
+
+## Pass by reference
+
+Now the broken function can be fixed. Add an `&` after the type of the parameter:
+
+```cpp
+#include <iostream>
+
+void addPoints(int& points) {
+    points = points + 5;
+}
+
+int main() {
+    int score = 10;
+    addPoints(score);
+
+    std::cout << score << "\n";    // 15
+
+    return 0;
+}
+```
+
+This is <Term id="pass-by-reference">pass by reference</Term>. At the call, `points` becomes another name for the caller's `score`, so `points = points + 5` is `score = score + 5`. The call looks exactly the same as before. No copy is made and nothing is thrown away.
+
+<Scene name="cpp-foundations/pass-three-ways">
+Play it through, then scrub to the second step. Which of the three columns made a new box, and what does each new box hold?
+</Scene>
+
+The middle column is the same fix done with a pointer. The function takes an `int*`, the caller passes `&score`, and the function follows the address with `*`. It works the same, and it was the only way before references existed, which is why you'll still read plenty of code that does it. The `&` at the call is a useful hint to the reader that the variable may change. With a reference you can't tell from the call, and you have to look at the function's signature.
+
+Here is the function that finishes the thread from the last page. In [Functions](../functions/), `clamp` handed back an answer. This version changes the caller's variable instead:
+
+```cpp
+void clampInPlace(int& value, int low, int high) {
+    if(value < low) {
+        value = low;
+    }
+
+    if(value > high) {
+        value = high;
+    }
+}
+
+void example() {
+    int speed = 140;
+    clampInPlace(speed, 0, 100);    // speed is now 100
+}
+```
+
+Only `value` is a reference. `low` and `high` are just read, so copies are fine. You can't call `clampInPlace(140, 0, 100)`, since a bare 140 is not a box, and g++ refuses to compile it. Changing a number that exists nowhere would be pointless.
+
+Pass by reference has a second use, unrelated to changing things. Passing by value copies the argument, which costs nothing for an `int` and a lot for a value with many parts. A <Term id="const-reference">const reference</Term> gives the function access to the original without a copy, and promises not to change it:
+
+```cpp
+int largest(const int& a, const int& b) {
+    if(a > b) {
+        return a;
+    }
+
+    return b;
+}
+```
+
+The compiler enforces the promise, and assigning to `a` inside is an error. A `const` reference also accepts values that aren't boxes, so `largest(3, 4)` works, which is why it's the usual way to take a read-only input. For a lone `int` it's pointless, since copying four bytes is as cheap as anything and by value is the right choice. The habit starts to matter for the many-field types in [Structs](../../bigger-programs/structs/). The usual rule is to pass small things by value, large read-only things by `const` reference, and things the function must change by plain reference. The learncpp articles on [pass by lvalue reference](https://www.learncpp.com/cpp-tutorial/pass-by-lvalue-reference/) and [pass by const lvalue reference](https://www.learncpp.com/cpp-tutorial/pass-by-const-lvalue-reference/) cover the cases.
+
+## Pointers or references?
+
+They overlap, so which one when? Start with a reference. It can't be null, can't be left uninitialized and can't be retargeted by accident, and the code reads cleanly. Reach for a pointer when you need something a reference lacks:
+
+- **"Nothing" is a legal answer.** A pointer can be `nullptr` to say "no object here". A reference can't.
+- **It has to change what it refers to.** A pointer can be reassigned to another box. A reference stays put.
+- **It walks through memory**, as in the section on arrays below, or points into the heap, as in the last one.
+
+`const` has two places to go with a pointer, and they mean different things. `const int* p` is a pointer to a constant int: you can move `p` but can't write through it. `int* const p` is a constant pointer to an int: you can write through it but can't move it. Read the declaration from right to left to decode it. The learncpp article on [pointers and const](https://www.learncpp.com/cpp-tutorial/pointers-and-const/) has the full set.
+
+## What the arrow means
+
+Programs soon group related values into one thing. A **struct** is a bundle of named fields stored side by side, and [Structs](../../bigger-programs/structs/) covers it properly. Here's a two-field one, as a preview:
+
+```cpp
+struct Point {
+    int x;
+    int y;
+};
+
+Point pt = {3, 4};
+Point* p = &pt;
+
+p->x = 8;
+```
+
+With a plain `Point` you reach a field with a dot, `pt.x`. With a pointer to one, first follow the pointer, then pick the field: `(*p).x`. The parentheses are required, because `.` binds tighter than `*`, and `*p.x` would try to follow the field.
+
+<Scene name="cpp-foundations/arrow-operator">
+Watch the label under the struct change from `*p` to `(*p).x` to `p->x`, and notice which part is outlined each time.
+</Scene>
+
+Writing that out every time would be miserable, so C++ has the shorthand `->`, which means exactly `(*p).x`. Nothing more happens than that. It shows up wherever code holds a pointer to an object, and PROS code is full of objects. See the learncpp article on [member selection with pointers and references](https://www.learncpp.com/cpp-tutorial/member-selection-with-pointers-and-references/). A reference needs no arrow, since it is just another name, and you use a dot.
+
+## Arrays and pointers
+
+Back on [Arrays and Loops](../arrays-and-loops/), the CPU found `speeds[2]` by taking the start address and adding the index times the element size. A pointer is exactly that start address. In fact, an array's name turns into a pointer to its first element almost everywhere you use it. This is <Term id="array-decay">array decay</Term>.
+
+```cpp
+int speeds[3] = {50, 80, 100};
+
+int* p = speeds;          // points at speeds[0]
+std::cout << *(p + 1);    // 80
+```
+
+Adding 1 to a pointer doesn't move it one byte. It moves it one *element*, so for an `int` pointer, `p + 1` is the address four bytes later. The subscript `speeds[i]` is defined to mean `*(speeds + i)`. Indexing is pointer arithmetic with nicer notation, and walking past the end is the same bug whichever way you write it.
+
+Decay is why a function can't tell how long an array it receives is:
+
+```cpp
+int speeds[3] = {50, 80, 100};
+
+int total(const int* values, int count) {
+    int sum = 0;
+
+    for(int i = 0; i < count; i++) {
+        sum += values[i];
+    }
+
+    return sum;
+}
+
+int answer = total(speeds, 3);    // 230
+```
+
+The call passes only the address of `speeds[0]`. Inside the function, `sizeof(values)` is the size of a pointer, 8 on a 64-bit laptop and 4 on the Brain, and not the 12 bytes of the array. That's why `sizeof(a) / sizeof(a[0])` stops working at a function boundary, as that earlier page warned, and why the length travels as a second argument. Writing `int values[]` as the parameter changes nothing; the compiler reads it as `int* values`. The learncpp articles on [array decay](https://www.learncpp.com/cpp-tutorial/c-style-array-decay/) and [pointer arithmetic](https://www.learncpp.com/cpp-tutorial/pointer-arithmetic-and-subscripting/) go further. The safer containers that carry their own length, `std::array` and `std::vector`, arrive in [Vector](../../bigger-programs/vector/).
+
+## Stack and heap
+
+Every variable so far lived in <Term id="stack-memory">stack memory</Term>, the <T id="stack-frame">frames</T> from [the call stack](../functions/#the-call-stack). That memory is automatic: a frame appears when a function is called and vanishes when it returns. It's fast and it can't leak, but there are two things it can't do. A variable can't outlive the function that made it, and its size must be known when the program is written.
+
+When you need memory that survives a return, or whose size is chosen while the program runs, there's a second region, the <Term id="heap">heap</Term>. You ask for a box with `new`, which is <Term id="dynamic-allocation">dynamic allocation</Term>. It gives back the box's address, so you keep it in a pointer. You give the box back with `delete`:
+
+```cpp
+int* c = new int(5);
+
+*c = *c + 1;
+
+delete c;
+```
+
+On the stack the program tidies up for you. On the heap it does not: a box stays reserved until you `delete` it. The animation runs one small program that goes wrong in the ways this can.
+
+<Scene name="cpp-foundations/stack-heap">
+Follow the first box on the heap. It survives the pop of `make`'s frame. Then step to line 8 and find the box nothing points to, then to line 9 and look at the red arrows.
+</Scene>
+
+Heap memory that was handed out and then lost track of is a <Term id="memory-leak">memory leak</Term>. The box is still reserved, but no pointer holds its address, so it can never be freed. A leak in code that runs once is harmless. In a loop that runs every 10 milliseconds, a hundred times a second, it uses up the Brain's fixed supply of RAM until allocation starts failing. Every `new` needs exactly one `delete`, on every path out of the code.
+
+The reverse mistake is a <Term id="dangling-pointer">dangling pointer</Term>: a pointer to a box that's gone. After `delete p;`, the pointer `p` still holds the old address. Following it is undefined behavior, and often it appears to work, because the freed bytes haven't been reused yet, until one day they have. Setting a pointer to `nullptr` after deleting it turns that silent bug into one you can check for. (`delete` on a null pointer is allowed and does nothing.) Deleting the same box twice is also undefined behavior.
+
+Dangling doesn't need the heap. This function hands back a reference to a variable that is destroyed as it returns:
+
+```cpp
+int& broken() {
+    int x = 5;
+    return x;
+}
+```
+
+g++ warns about this one when you compile with `-Wall`. The frame that held `x` was popped, so the caller holds a name for bytes the next call will reuse. A function can safely return a reference to something that outlives it, but never to its own locals.
+
+Most robot code never calls `new`. The motors and sensors from the running robot are global objects, which live for the whole program and need no cleanup. When you do need the heap, modern C++ has types that call `delete` for you at the right moment, so you never write it by hand. They are the subject of [Smart Pointers](../../bigger-programs/smart-pointers/), and this page is why they exist. The learncpp article on [the stack and the heap](https://www.learncpp.com/cpp-tutorial/the-stack-and-the-heap/) compares the two regions, and [dynamic memory allocation with new and delete](https://www.learncpp.com/cpp-tutorial/dynamic-memory-allocation-with-new-and-delete/) covers the syntax.
+
+<ReadTheDocs>
+Open cppreference's page on [nullptr](https://en.cppreference.com/cpp/language/nullptr) and find the name of the type of `nullptr`, and what it can be converted to. Then find out why C++ added it when 0 and `NULL` already existed.
+</ReadTheDocs>
+
+That finishes the C++ you need before touching hardware. Next, [Installing PROS](../../first-robot-program/installing-pros/) puts it on a robot.
+
+<Check prompt="What are a and b after this code runs?">
+`a` is 5 and `b` is 9. `p` first holds the address of `a`, so `*p = 5` writes into `a`. Then `p = &b` points it at `b`, and `*p = 9` writes there. `a` is untouched by the second write.
+
+```cpp
+int a = 1;
+int b = 2;
+int* p = &a;
+
+*p = 5;
+p = &b;
+*p = 9;
+```
+</Check>
+
+<Check prompt="Write a function halve that cuts a double variable in half, so that after halve(speed) the caller's speed is smaller.">
+```cpp
+void halve(double& value) {
+    value = value / 2;
+}
+```
+The parameter has to be a reference, so the function works on the caller's own box. Written with a plain `double` it would halve a copy, just like the first `addPoints`.
+</Check>
+
+<Check prompt="Why does clampInPlace(140, 0, 100) refuse to compile, and why is that the right call?">
+The parameter `int& value` has to name a box, and `140` is a bare number with no box behind it. Even if the compiler allowed it, the clamped result would go into a place nobody can read, so the call could never do anything useful.
+</Check>
+
+<Check prompt="Inside total(const int* values, int count), a programmer writes sizeof(values) / sizeof(values[0]) to get the length. What does it give on the Brain, and on a 64-bit laptop?">
+On the Brain it gives 1, because `sizeof(values)` is the size of a pointer, 4 bytes, and `sizeof(values[0])` is 4. On a 64-bit laptop it gives 2, since the pointer is 8 bytes. The array decayed to a pointer when it was passed, so the function can't see its length. Pass the count as a parameter.
+</Check>
+
+<Check prompt="This function is called every 10 ms from a robot loop. What goes wrong, and how would you fix it? void tick() { int* reading = new int(0); *reading = *reading + 1; }">
+Each call allocates a box and drops the only pointer to it when the function returns, so every call leaks. At 100 calls a second the heap fills up. The fix here is to not use the heap at all: `int reading = 0;` lives on the stack and is cleaned up automatically. If the heap were needed, add `delete reading;` before the function ends.
+</Check>

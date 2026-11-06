@@ -71,5 +71,6 @@
   { "id": "dynamic-allocation", "term": "dynamic allocation", "definition": "Requesting memory from the heap while the program runs, with new in C++.", "page": "cpp-foundations/pointers-and-references" },
   { "id": "memory-leak", "term": "memory leak", "definition": "Heap memory that is never given back, usually because the pointer to it was lost.", "page": "cpp-foundations/pointers-and-references" },
   { "id": "dangling-pointer", "term": "dangling pointer", "definition": "A pointer to memory that has already been freed or has gone out of scope.", "page": "cpp-foundations/pointers-and-references" },
-  { "id": "segmentation-fault", "term": "segmentation fault", "definition": "A crash caused by a program touching memory it isn't allowed to use.", "page": "cpp-foundations/pointers-and-references" }
+  { "id": "segmentation-fault", "term": "segmentation fault", "definition": "A crash caused by a program touching memory it isn't allowed to use.", "page": "cpp-foundations/pointers-and-references" },
+  { "id": "array-decay", "term": "array decay", "definition": "An array name turning into a pointer to its first element, which happens when it is passed to a function.", "page": "cpp-foundations/pointers-and-references" }
 ]
