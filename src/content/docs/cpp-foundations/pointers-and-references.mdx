@@ -37,7 +37,7 @@ int main() {
 }
 ```
 
-`&score` is where the box named `score` lives. `int*` is the type "pointer to int", and `p` is a new box whose contents are that address. On my laptop this printed `0x7ffdbb101290`, and it prints something different on other runs and other machines. The `0x` marks <T id="hexadecimal">hex</T>. What matters is that it's an ordinary number, one that happens to be the name of a place.
+`&score` is where the box named `score` lives. `int*` is the type "pointer to int", and `p` is a new box whose contents are that address. On a 64-bit laptop this prints something like `0x7ffdbb101290`, and it changes between runs and machines. The `0x` marks <T id="hexadecimal">hex</T>. What matters is that it's an ordinary number, one that happens to be the name of a place.
 
 The `int` in `int*` isn't decoration. An address alone says where a box starts, not how big it is or how to read the bytes. The type records that, so `int*` means "four bytes from here, read as a whole number", and a `double*` would read eight. The pointer's own size depends on the machine: 8 bytes on a 64-bit laptop and 4 bytes on the V5 Brain.
 
@@ -69,7 +69,7 @@ if(p != nullptr) {
 }
 ```
 
-Following a null pointer is *undefined behavior*, the same promise-nothing category as the signed overflow on the first page. On a laptop the operating system usually notices and kills the program, which is called a <Term id="segmentation-fault">segmentation fault</Term>. That's not a guarantee, because the compiler is allowed to assume it never occurs. The PROS headers don't say what the V5 Brain does, so treat it as a crash or worse, and aim not to find out. The next two ideas are mostly ways to keep this bug out of your programs.
+Following a null pointer is <T id="undefined-behavior">undefined behavior</T>, the same promise-nothing category as the signed overflow on the first page. On a laptop the operating system usually notices and kills the program, which is called a <Term id="segmentation-fault">segmentation fault</Term>. That's not a guarantee, because the compiler is allowed to assume it never occurs. The PROS headers don't say what the V5 Brain does, so treat it as a crash or worse, and aim not to find out. The next two ideas are mostly ways to keep this bug out of your programs.
 
 ## References: a second name
 

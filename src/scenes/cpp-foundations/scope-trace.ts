@@ -70,7 +70,7 @@ export default defineScene({
         };
         const OX = 400;
         const outer = bucket(OX, 52, 'speed');
-        const outerTag = draw.text('hidden', OX + 96, 80, { size: 13, color: color.error });
+        const outerTag = draw.text('hidden', OX + 96, 80, { size: 13, color: color.dim });
 
         const frame = draw.rect(OX - 24, 130, 292, 170, { color: color.focus, width: 1.5, dash: '6 5' });
         const frameLabel = draw.text('inside the braces', OX - 12, 152, { size: 13, color: color.focus });

@@ -17,6 +17,7 @@
   { "id": "global-variable", "term": "global variable", "definition": "A variable declared outside every function, which any later code in the file can use.", "page": "cpp-foundations/variables-types-scope" },
   { "id": "sizeof", "term": "sizeof", "definition": "A C++ operator that gives how many bytes a type or variable takes up.", "page": "cpp-foundations/variables-types-scope" },
   { "id": "uninitialized-variable", "term": "uninitialized variable", "definition": "A variable created without a value, which holds whatever was already in its memory.", "page": "cpp-foundations/variables-types-scope" },
+  { "id": "undefined-behavior", "term": "undefined behavior", "definition": "Code the C++ language makes no promises about, so the program may crash, give nonsense or appear to work.", "page": "cpp-foundations/variables-types-scope" },
   { "id": "literal", "term": "literal", "definition": "A value written directly in code, like 42, 3.25 or true.", "page": "cpp-foundations/variables-types-scope" },
   { "id": "expression", "term": "expression", "definition": "A piece of code that works out to a single value, like speed * 2 + 1.", "page": "cpp-foundations/math-and-decisions" },
   { "id": "operator", "term": "operator", "definition": "A symbol that does something to values, like + or ==.", "page": "cpp-foundations/math-and-decisions" },

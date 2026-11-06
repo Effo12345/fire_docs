@@ -53,7 +53,7 @@ export default defineScene({
             q.text(`${a} / ${b} = ${groups}`).set({ fill: color.value });
             r.text(`${a} % ${b} = ${left}`).set({ fill: left ? color.error : color.dim });
             real.text(`static_cast<double>(${a}) / ${b} = ${(a / b).toFixed(2)}`).set({ fill: color.focus });
-            note.text(left ? `The ${left} left over can't fill another group of ${b}, so ${a} / ${b} drops them.` : `Nothing is left over, so the division is exact.`);
+            note.text(left ? `The ${left} left over can't fill another group of ${b}, so ${a} / ${b} drops ${left === 1 ? 'it' : 'them'}.` : `Nothing is left over, so the division is exact.`);
         };
     },
 });

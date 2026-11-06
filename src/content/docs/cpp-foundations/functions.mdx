@@ -88,7 +88,7 @@ Watch where the highlight goes after the call. Then step back and look at which 
 
 The picture makes one thing visible that the code hides: running a function is a jump. Inside a Computer described the <T id="program-counter">program counter</T> stepping through instructions one by one. A call sets it to the first instruction of the function, which is why the highlight leaps up the page, and a `return` sets it back to the instruction after the call. For that to work, the spot to come back to has to be saved somewhere when the call happens. The section on the call stack below says where.
 
-If a function ends without reaching any `return`, and its type isn't `void`, the result is undefined behavior. The compiler can warn about it (g++ does, with `-Wall`), and it's a real bug: the caller receives whatever was left in the place the answer was supposed to go. `main` is the one exception, and falling off its end counts as `return 0;`.
+If a function ends without reaching any `return`, and its type isn't `void`, the result is <T id="undefined-behavior">undefined behavior</T>. The compiler can warn about it (g++ does, with `-Wall`), and it's a real bug: the caller receives whatever was left in the place the answer was supposed to go. `main` is the one exception, and falling off its end counts as `return 0;`.
 
 A function like `clamp` is the first of many you'll reuse. When you build a PID controller, its output has to be limited to the range a motor accepts, 12000 millivolts either way, and it is this same function with different numbers.
 
@@ -192,7 +192,7 @@ double half(double n) {
 
 Now `half(7)` is 3 and `half(7.0)` is 3.5. The compiler picks the version by looking at the argument types at the call, and it settles this while compiling, so overloading costs nothing at run time. Internally each version gets a distinct name that encodes its parameter types: g++ for ARM calls these two `_Z4halfi` and `_Z4halfd`. That's why the signature is the name plus the parameter types and not the return type. Two functions that differ only in their return type can't coexist, since the call site has no way to say which one it wants.
 
-Overloading is also where things go wrong. Call `half(7L)` with a `long`, which is an exact match for neither version, and both conversions look equally good, so g++ stops with `call of overloaded 'half(long int)' is ambiguous`. When a call is ambiguous, cast the argument to the type you mean. The full ranking rules are on cppreference's [overload resolution](https://en.cppreference.com/cpp/language/overload_resolution) page, and the learncpp pages on [differentiating overloads](https://www.learncpp.com/cpp-tutorial/function-overload-differentiation/) and [ambiguous matches](https://www.learncpp.com/cpp-tutorial/function-overload-resolution-and-ambiguous-matches/) are the gentler version. PROS uses it too: the motor class has more than one constructor, and the compiler picks between them by the arguments you pass.
+Overloading is also where things go wrong. Call `half(7L)` with a `long`, which is an exact match for neither version, and both conversions look equally good, so g++ stops with `call of overloaded 'half(long int)' is ambiguous`. When a call is ambiguous, cast the argument to the type you mean. The full ranking rules are on cppreference's [overload resolution](https://en.cppreference.com/cpp/language/overload_resolution) page, and the learncpp pages on [differentiating overloads](https://www.learncpp.com/cpp-tutorial/function-overload-differentiation/) and [ambiguous matches](https://www.learncpp.com/cpp-tutorial/function-overload-resolution-and-ambiguous-matches/) are the gentler version. PROS uses overloading too: the motor class has more than one constructor, and the compiler picks between them by the arguments you pass.
 
 ## The call stack
 
@@ -212,7 +212,7 @@ Each call to a function gets its own parameters and locals, so the same function
 
 The return location is part of the frame. On the V5 Brain's ARM chip, a call puts the return address in a register called the link register, and a function that calls others saves it in its frame first. You can see this in the assembly the compiler produces for a tiny function: it begins with `push {fp, lr}`. Paste a function into [Compiler Explorer](https://godbolt.org/), choose an ARM compiler, and read the output. The stack itself is what [stack memory](../pointers-and-references/#stack-and-heap) means on the next page, in contrast with the heap.
 
-Everything here describes what the language promises, not always what the machine does. With optimization on, the compiler often inlines a small function: it pastes the body into the caller and skips the call, so no frame is created. I compiled the `add` function from the animation for ARM with `-O2`, and no call to it was left in the output. The behavior of your program doesn't change, but a debugger may not show a frame you expected. When you pause a program in a debugger, its list of active frames is the call stack, and the learncpp article on [the debugger's call stack](https://www.learncpp.com/cpp-tutorial/using-an-integrated-debugger-the-call-stack/) shows how to read one.
+Everything here describes what the language promises, not always what the machine does. With optimization on, the compiler often inlines a small function: it pastes the body into the caller and skips the call, so no frame is created. Compile the `add` function from the animation for ARM with `-O2`, and no call to it is left in the output. The behavior of your program doesn't change, but a debugger may not show a frame you expected. When you pause a program in a debugger, its list of active frames is the call stack, and the learncpp article on [the debugger's call stack](https://www.learncpp.com/cpp-tutorial/using-an-integrated-debugger-the-call-stack/) shows how to read one.
 
 ## Stack overflow and recursion
 
@@ -230,13 +230,13 @@ int sumTo(int n) {
 
 `sumTo(4)` becomes 4 + `sumTo(3)`, which waits for 3 + `sumTo(2)`, and so on down to `sumTo(0)`, which finally returns without calling anything. The answer then builds back up through the returns: 0, 1, 3, 6, 10. That `if` is the **base case**, the input answered directly. Without it, nothing ever stops the calls.
 
-Each of those waiting calls has its own frame. The stack is finite, so a recursion that goes too deep, or never stops, runs out of room. That's a <Term id="stack-overflow">stack overflow</Term>. Here is what the stack costs on the Brain. A PROS task gets a stack of `TASK_STACK_DEPTH_DEFAULT` words by default, set in `rtos.h` to 0x2000. A word is 4 bytes, so that's 8192 words, which is 32 KB. I compiled `sumTo` for ARM without optimization and its frame came to 16 bytes, so the limit comes around 2000 calls deep. A function with a bigger local array would run out much sooner.
+Each of those waiting calls has its own frame. The stack is finite, so a recursion that goes too deep, or never stops, runs out of room. That's a <Term id="stack-overflow">stack overflow</Term>. Here is what the stack costs on the Brain. A PROS task gets a stack of `TASK_STACK_DEPTH_DEFAULT` words by default, set in `rtos.h` to 0x2000. A word is 4 bytes, so that's 8192 words, which is 32 KB. Compiled for ARM without optimization, `sumTo` has a 16-byte frame, so the limit comes around 2000 calls deep. A function with a bigger local array would run out much sooner.
 
 <Scene name="cpp-foundations/recursion-depth">
 Set the frame size to 64 bytes and slide the depth until the bar turns red. Then drop the frame size to 16 and find the new limit. Large locals shrink the room for calls.
 </Scene>
 
-The same bug on a laptop is gentler only because the stack is bigger: Linux defaults to 8 MB. I ran a function with no base case on a laptop and it died with a segmentation fault. I haven't tested what the Brain does when a task overflows its stack, and the PROS headers don't say. Treat it as a crash.
+The same bug on a laptop is gentler only because the stack is bigger: Linux defaults to 8 MB. A function with no base case on a laptop dies with a <T id="segmentation-fault">segmentation fault</T>. The PROS headers don't say what the Brain does when a task overflows its stack, and this guide hasn't tested it. Treat it as a crash.
 
 A loop can do anything recursion can, with no frames piling up, and on a robot a loop is nearly always the better choice. Recursion earns its place on problems that naturally split into smaller copies of themselves, like walking through nested data. The optimizer can also turn some recursion into a loop on its own, so a bug that overflows at `-O0` may quietly work at `-O2`. Don't rely on that. The learncpp article on [recursion](https://www.learncpp.com/cpp-tutorial/recursion/) works through more examples.
 
@@ -246,11 +246,11 @@ Open cppreference's page on [default arguments](https://en.cppreference.com/cpp/
 
 You can now name a piece of work and reuse it, but `addPoints` is still broken. The next page, [Pointers and References](../pointers-and-references/), gives a function a way to reach the caller's own variable.
 
-<Check prompt="In `clamp(speed * 2, 0, 100)`, name the arguments and the parameters.">
+<Check prompt="In clamp(speed * 2, 0, 100), name the arguments and the parameters.">
 The arguments are `speed * 2`, `0` and `100`, the values the caller supplies. The parameters are `value`, `low` and `high`, the names in the function's definition. `speed * 2` is worked out first, and the result is copied into `value`.
 </Check>
 
-<Check prompt="What do `a` and `b` hold after this code runs?" >
+<Check prompt="What do a and b hold after this code runs?">
 `a` is 4 and `b` is 8. `n` is a copy of `a`, so doubling `n` inside the function leaves `a` alone, and the function hands back 8.
 
 ```cpp
@@ -264,7 +264,7 @@ int b = doubleIt(a);
 ```
 </Check>
 
-<Check prompt="Write a function `isLow` that takes `int batteryPercent` and says whether it is below 20.">
+<Check prompt="Write a function isLow that takes int batteryPercent and says whether it is below 20.">
 ```cpp
 bool isLow(int batteryPercent) {
     return batteryPercent < 20;
@@ -273,10 +273,10 @@ bool isLow(int batteryPercent) {
 A comparison already produces a `bool`, so it can be returned directly. No `if` is needed.
 </Check>
 
-<Check prompt="A function declares `int total = 0;`, adds to it, and returns. When it's called a second time, does `total` start at 0 or at the old value?">
+<Check prompt="A function declares int total = 0;, adds to it, and returns. When it's called a second time, does total start at 0 or at the old value?">
 At 0. The first call's frame was popped when it returned, and `total` went with it. The second call pushes a new frame and runs the declaration again.
 </Check>
 
-<Check prompt="What goes wrong if you call `sumTo(-1)`?">
+<Check prompt="What goes wrong if you call sumTo(-1)?">
 The base case tests for exactly 0, and the calls go to -2, -3, and so on away from it. Nothing ever stops them, so the frames pile up until the stack overflows. A safer test is `n <= 0`.
 </Check>

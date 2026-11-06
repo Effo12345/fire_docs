@@ -60,7 +60,7 @@ Slide the index to 3. There is no `speeds[3]`, but the formula doesn't know that
 
 C++ does not check. An array doesn't remember how long it is, and the compiled code for `speeds[i]` is only the multiply, the add and the read. In the picture, `total` happens to sit in the next four bytes, so `speeds[3]` reads 230. That layout is the compiler's choice, and nothing promises it. Reading out of bounds gives some other variable's value, or leftover bytes, or an address the program isn't allowed to touch.
 
-Writing is worse. Storing into `speeds[3]` changes whatever lives at that address, and it does so silently. That is a <Term id="buffer-overflow">buffer overflow</Term>: writing past the end of an array, damaging a neighbor. The damaged neighbor might be another variable, which gives bugs that show up far from their cause. It might be bookkeeping the program relies on, such as where a function should return to, which is how many security holes in real software work. The language calls all of this *undefined behavior*, so the program is allowed to do anything, including appearing to work today. Compilers can sometimes see it: with `-Wall -O2`, a loop that visits `speeds[3]` makes g++ warn that an iteration "invokes undefined behavior", and a warning is the cheapest bug report you will ever get.
+Writing is worse. Storing into `speeds[3]` changes whatever lives at that address, and it does so silently. That is a <Term id="buffer-overflow">buffer overflow</Term>: writing past the end of an array, damaging a neighbor. The damaged neighbor might be another variable, which gives bugs that show up far from their cause. It might be bookkeeping the program relies on, such as where a function should return to, which is how many security holes in real software work. The language calls all of this <T id="undefined-behavior">undefined behavior</T>, so the program is allowed to do anything, including appearing to work today. Compilers can sometimes see it: with `-Wall -O2`, a loop that visits `speeds[3]` makes g++ warn that an iteration "invokes undefined behavior", and a warning is the cheapest bug report you will ever get.
 
 Because the array forgets its length, you keep track of it yourself. The usual way is a constant:
 
@@ -237,18 +237,18 @@ Open [cppreference's page on `for`](https://en.cppreference.com/cpp/language/for
 
 Looking back at the sum, the average and the search, each is a small piece of work that is waiting to be reused on a different array. If you need the sum of two arrays, you would copy the loop and rename the variables, and a copy that has a bug in it is a bug twice. The next page gives a piece of code a name, so you can write it once and use it anywhere.
 
-<Check prompt="An array is declared as `int readings[8];`. What are the first and last valid indexes, and what does `readings[8]` do?">
+<Check prompt="An array is declared as int readings[8];. What are the first and last valid indexes, and what does readings[8] do?">
 0 and 7. `readings[8]` is out of bounds: nothing stops it, the program reads or writes whatever memory comes after the array, and the behavior is undefined.
 </Check>
 
-<Check prompt="If `speeds` starts at address 200 and each `int` is 4 bytes, what is the address of `speeds[5]`?">
+<Check prompt="If speeds starts at address 200 and each int is 4 bytes, what is the address of speeds[5]?">
 200 + 5 x 4 = 220. The index is the number of elements to skip from the start, and each one is 4 bytes wide.
 </Check>
 
-<Check prompt="Write a loop that prints every element of `speeds` except the ones equal to 0. Which statement did you use, and why does it not end the loop?">
+<Check prompt="Write a loop that prints every element of speeds except the ones equal to 0. Which statement did you use, and why does it not end the loop?">
 Inside a `for(int i = 0; i < COUNT; i++)`, put `if(speeds[i] == 0) { continue; }` before the `std::cout` line. `continue` ends only the current iteration, so the counter still goes up and the loop moves on to the next element. `break` would stop the whole loop at the first zero.
 </Check>
 
-<Check prompt="This loop is meant to run 5 times, but never stops. What is wrong? `for(unsigned i = 4; i >= 0; i--) { }`">
+<Check prompt="This loop is meant to run 5 times, but never stops. What is wrong? for(unsigned i = 4; i >= 0; i--) { }">
 An unsigned number can't go below zero. `i >= 0` is always true, and when `i` is 0, `i--` wraps around to 4294967295 instead. Use an `int` counter.
 </Check>

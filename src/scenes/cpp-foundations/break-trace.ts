@@ -16,13 +16,13 @@ for(int i = 0; i < 4; i++) {
     steps: [
         { line: 1, vars: { 'speeds[0]': 40, 'speeds[1]': 55, 'speeds[2]': 90, 'speeds[3]': 70 }, note: 'Looking for the first speed above 80.' },
         { line: 2, vars: { found: -1 }, note: '-1 means "not found yet". It is not a valid index, so it can\'t be mistaken for one.' },
-        { line: 4, vars: { i: 0 } },
+        { line: 4, vars: { i: 0 }, note: 'The loop starts with <code>i</code> at 0.' },
         { line: 5, note: 'Is 40 above 80? No.' },
-        { line: 4, vars: { i: 1 } },
+        { line: 4, vars: { i: 1 }, note: 'On to the next element.' },
         { line: 5, note: 'Is 55 above 80? No.' },
-        { line: 4, vars: { i: 2 } },
+        { line: 4, vars: { i: 2 }, note: 'On to the next element.' },
         { line: 5, note: 'Is 90 above 80? Yes.' },
-        { line: 6, vars: { found: 2 } },
+        { line: 6, vars: { found: 2 }, note: 'Save the index where it was found.' },
         { line: 7, note: '<code>break</code> leaves the loop immediately. The <code>i++</code> never runs, and <code>speeds[3]</code> is never looked at.' },
     ],
 });
