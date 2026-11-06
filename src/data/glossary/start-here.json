@@ -1,0 +1,22 @@
+[
+  { "id": "bit", "term": "bit", "definition": "The smallest piece of information a computer stores: a single 0 or 1.", "page": "start-here/inside-a-computer" },
+  { "id": "binary", "term": "binary", "definition": "A way of writing numbers using only the digits 0 and 1, where each place is worth twice the one to its right.", "page": "start-here/inside-a-computer" },
+  { "id": "byte", "term": "byte", "definition": "A group of 8 bits, able to hold a value from 0 to 255. Memory is measured in bytes.", "page": "start-here/inside-a-computer" },
+  { "id": "hexadecimal", "term": "hexadecimal", "definition": "A base-16 way of writing numbers, with digits 0 to 9 and A to F. One hex digit stands for exactly 4 bits. Often written with a leading 0x.", "page": "start-here/inside-a-computer" },
+  { "id": "ram", "term": "RAM", "definition": "Random access memory: the fast working memory a program uses while running. Its contents disappear when the power goes off.", "page": "start-here/inside-a-computer" },
+  { "id": "address", "term": "address", "definition": "The number that identifies one byte's location in memory.", "page": "start-here/inside-a-computer" },
+  { "id": "volatile-memory", "term": "volatile memory", "definition": "Memory that loses its contents when it loses power, such as RAM.", "page": "start-here/inside-a-computer" },
+  { "id": "word", "term": "word", "definition": "The amount of data a CPU naturally handles at once. On the 32-bit V5 Brain, a word is 4 bytes.", "page": "start-here/inside-a-computer" },
+  { "id": "cpu", "term": "CPU", "definition": "Central processing unit: the part of a computer that carries out instructions.", "page": "start-here/inside-a-computer" },
+  { "id": "register", "term": "register", "definition": "A tiny, extremely fast storage slot inside the CPU, holding the values it's working on right now.", "page": "start-here/inside-a-computer" },
+  { "id": "alu", "term": "ALU", "definition": "Arithmetic logic unit: the circuit inside a CPU that does math and comparisons.", "page": "start-here/inside-a-computer" },
+  { "id": "instruction", "term": "instruction", "definition": "A single basic command a CPU can carry out, like adding two registers.", "page": "start-here/inside-a-computer" },
+  { "id": "instruction-set", "term": "instruction set", "definition": "The full list of instructions a particular kind of CPU understands.", "page": "start-here/inside-a-computer" },
+  { "id": "machine-code", "term": "machine code", "definition": "A program in the form a CPU actually runs: instructions stored as numbers in memory.", "page": "start-here/inside-a-computer" },
+  { "id": "program-counter", "term": "program counter", "definition": "A CPU register holding the address of the next instruction to run. Often shortened to PC.", "page": "start-here/inside-a-computer" },
+  { "id": "fetch-decode-execute", "term": "fetch-decode-execute cycle", "definition": "The loop every CPU runs: get the next instruction from memory, work out what it means, and do it.", "page": "start-here/inside-a-computer" },
+  { "id": "clock-speed", "term": "clock speed", "definition": "How many timing pulses a CPU's clock produces per second, measured in hertz. Each step of the CPU's work takes place on these pulses.", "page": "start-here/inside-a-computer" },
+  { "id": "cache", "term": "cache", "definition": "A small, fast memory inside the CPU that keeps copies of recently used data, so most reads don't have to wait for RAM.", "page": "start-here/inside-a-computer" },
+  { "id": "non-volatile-memory", "term": "non-volatile memory", "definition": "Storage that keeps its contents without power, such as flash memory or an SD card.", "page": "start-here/inside-a-computer" },
+  { "id": "flash-memory", "term": "flash memory", "definition": "A kind of non-volatile storage with no moving parts. It's where the V5 Brain keeps uploaded programs.", "page": "start-here/inside-a-computer" }
+]

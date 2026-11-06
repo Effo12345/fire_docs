@@ -1,0 +1,13 @@
+---
+import { curriculum } from '../data/curriculum.mjs';
+
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+---
+<ol class="fd-chapters">
+    {curriculum.map((section) => (
+        <li>
+            <a href={`${base}/${section.dir}/${section.pages[0][0]}/`}>{section.label}</a>
+            <p>{section.blurb}</p>
+        </li>
+    ))}
+</ol>

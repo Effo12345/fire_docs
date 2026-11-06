@@ -1,0 +1,20 @@
+---
+import { glossary, termUrl } from '../data/glossary';
+
+const letters = [...new Set(glossary.map((entry) => entry.term[0].toUpperCase()))].sort();
+---
+<div class="fd-glossary">
+    {letters.map((letter) => (
+        <>
+            <h2 class="fd-glossary-letter" id={`letter-${letter.toLowerCase()}`}>{letter}</h2>
+            <dl>
+                {glossary.filter((entry) => entry.term[0].toUpperCase() === letter).map((entry) => (
+                    <>
+                        <dt id={entry.id}><a href={termUrl(entry)}>{entry.term}</a></dt>
+                        <dd>{entry.definition}</dd>
+                    </>
+                ))}
+            </dl>
+        </>
+    ))}
+</div>

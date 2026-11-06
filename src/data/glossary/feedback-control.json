@@ -1,0 +1,18 @@
+[
+  { "id": "setpoint", "term": "setpoint", "definition": "The value a controller is trying to reach. Another word for the target.", "page": "feedback-control/pid" },
+  { "id": "control-error", "term": "error", "definition": "The difference between the setpoint and the measured value. Everything in a PID controller is computed from it.", "page": "feedback-control/pid" },
+  { "id": "gain", "term": "gain", "definition": "A number you choose that sets how strongly a controller reacts. PID has three: kP, kI and kD.", "page": "feedback-control/pid" },
+  { "id": "proportional-term", "term": "proportional term", "definition": "The part of PID that pushes in proportion to the current error.", "page": "feedback-control/pid" },
+  { "id": "derivative-term", "term": "derivative term", "definition": "The part of PID that reacts to how fast the error is changing, acting as a brake.", "page": "feedback-control/pid" },
+  { "id": "integral-term", "term": "integral term", "definition": "The part of PID that reacts to the running total of past error, fixing errors that linger.", "page": "feedback-control/pid" },
+  { "id": "integral-windup", "term": "integral windup", "definition": "When the integral term builds up too much while the output is already at its limit, causing overshoot later.", "page": "feedback-control/pid" },
+  { "id": "saturation", "term": "saturation", "definition": "When a controller asks for more than the hardware can deliver, so the output stays at its limit.", "page": "feedback-control/pid" },
+  { "id": "rise-time", "term": "rise time", "definition": "How long a system takes to go from 10% to 90% of the way to its setpoint.", "page": "feedback-control/pid" },
+  { "id": "overshoot", "term": "overshoot", "definition": "How far a system travels past its setpoint.", "page": "feedback-control/pid" },
+  { "id": "settling-time", "term": "settling time", "definition": "How long a system takes to get close to its setpoint and stay there.", "page": "feedback-control/pid" },
+  { "id": "steady-state-error", "term": "steady-state error", "definition": "The error left over once a system has stopped changing.", "page": "feedback-control/pid" },
+  { "id": "oscillation", "term": "oscillation", "definition": "Swinging back and forth around the setpoint.", "page": "feedback-control/pid" },
+  { "id": "tuning", "term": "tuning", "definition": "Finding the gain values that make a controller work well on a particular robot.", "page": "feedback-control/pid" },
+  { "id": "derivative-kick", "term": "derivative kick", "definition": "A sudden spike in the derivative term caused by the setpoint jumping to a new value.", "page": "feedback-control/pid" },
+  { "id": "feedforward", "term": "feedforward", "definition": "Output calculated from what you already know the system needs, added before any error appears.", "page": "feedback-control/pid" }
+]

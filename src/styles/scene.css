@@ -157,3 +157,14 @@ fire-scene { display: block; }
 .fd-check summary::marker { color: var(--fd-ink-faint); }
 .fd-check-answer { margin-top: 0.8rem; color: var(--fd-ink-dim); }
 .fd-check-answer > :last-child { margin-bottom: 0; }
+
+/* Glossary */
+.fd-glossary-letter { margin-top: 2em; color: var(--fd-ink-dim); }
+.fd-glossary dt { margin-top: 1.1em; font-weight: 600; color: var(--fd-ink); }
+.fd-glossary dd { margin: 0.1em 0 0; color: var(--sl-color-text); }
+
+/* Home page chapter list */
+.fd-chapters { margin: 1.5em 0 0; padding: 0; list-style: none; border-top: 1px solid var(--fd-rule); }
+.fd-chapters li { margin: 0; padding: 0.8rem 0; border-bottom: 1px solid var(--fd-rule); }
+.fd-chapters a { font-size: 1.15rem; font-weight: 600; text-decoration: none; }
+.fd-chapters p { margin: 0.1rem 0 0; color: var(--fd-ink-dim); }

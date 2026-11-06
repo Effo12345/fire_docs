@@ -1,0 +1,17 @@
+---
+// Uses a term defined earlier. Links to its definition and shows the meaning on hover.
+// Example: <T id="register">registers</T>
+import { findTerm, termUrl } from '../data/glossary';
+
+interface Props {
+    id: string;
+}
+
+const { id } = Astro.props;
+const entry = findTerm(id);
+if(!entry) {
+    if(process.env.FIRE_STRICT_TERMS) throw new Error(`<T>: "${id}" isn't in src/data/glossary/`);
+    console.warn(`<T>: "${id}" isn't in src/data/glossary/ yet`);
+}
+---
+{entry ? <a class="fd-termref" href={termUrl(entry)} title={entry.definition}><slot /></a> : <slot />}

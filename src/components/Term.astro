@@ -1,0 +1,13 @@
+---
+// Marks the one place a technical term is defined. It must have an entry in src/data/glossary/.
+// Example: <Term id="register">register</Term>
+import { findTerm } from '../data/glossary';
+
+interface Props {
+    id: string;
+}
+
+const { id } = Astro.props;
+if(!findTerm(id)) throw new Error(`<Term>: "${id}" isn't in src/data/glossary/`);
+---
+<dfn id={`term-${id}`} class="fd-term"><slot /></dfn>
