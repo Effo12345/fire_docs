@@ -1,0 +1,14 @@
+---
+// A question with a hidden answer. Put the question in the prompt prop or the "question" slot.
+interface Props {
+    prompt?: string;
+}
+const { prompt } = Astro.props;
+---
+<div class="fd-check">
+    <p class="fd-check-label">Check your understanding</p>
+    <details>
+        <summary>{prompt ?? <slot name="question" />}</summary>
+        <div class="fd-check-answer"><slot /></div>
+    </details>
+</div>

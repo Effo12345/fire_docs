@@ -1,0 +1,8 @@
+---
+// Colors a word to match its meaning in the animations: value, focus, target or error
+interface Props {
+    c: 'value' | 'focus' | 'target' | 'error';
+}
+const { c } = Astro.props;
+---
+<span class={`fd-${c}`}><slot /></span>

@@ -1,0 +1,17 @@
+---
+// A link to the PROS docs from the registry in src/data/pros-api.json, which comes from the
+// docs themselves. Example: <Api sym="motors/move_voltage" />. A wrong name fails the build.
+import registry from '../data/pros-api.json';
+
+interface Props {
+    sym: string;
+    label?: string;
+}
+
+const { sym, label } = Astro.props;
+const href = (registry as Record<string, string>)[sym];
+if(!href) throw new Error(`<Api>: "${sym}" isn't in src/data/pros-api.json`);
+const fallback = sym.includes('/') ? sym.split('/').pop() : sym;
+const isTutorial = sym.startsWith('tutorial/');
+---
+<a href={href} target="_blank" rel="noopener">{isTutorial ? (label ?? fallback) : <code>{label ?? fallback}</code>}</a>

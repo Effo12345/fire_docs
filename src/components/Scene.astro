@@ -1,0 +1,31 @@
+---
+// An animation from src/scenes. The name is its path, like "feedback-control/pid-response".
+// Anything inside the tags becomes the caption.
+import type { SceneDef } from '../kit/scene';
+
+interface Props {
+    name: string;
+}
+
+const { name } = Astro.props;
+const modules = import.meta.glob<{ default: SceneDef }>('/src/scenes/**/*.ts');
+const load = modules[`/src/scenes/${name}.ts`];
+if(!load) throw new Error(`<Scene>: no scene at src/scenes/${name}.ts`);
+
+const { default: def } = await load();
+if(!def?.build) throw new Error(`<Scene>: src/scenes/${name}.ts has no default-exported scene`);
+const aspect = `${def.width ?? 720} / ${def.height ?? 400}`;
+const hasCaption = Astro.slots.has('default');
+---
+<figure class="fd-scene">
+    <fire-scene data-name={name}>
+        <div style={`aspect-ratio: ${aspect}`}>
+            <noscript><p class="fd-noscript">This animation needs JavaScript: {def.label}</p></noscript>
+        </div>
+    </fire-scene>
+    {hasCaption && <figcaption><slot /></figcaption>}
+</figure>
+
+<script>
+    import '../kit/player';
+</script>

@@ -1,0 +1,17 @@
+---
+// Credits an original paper. Pass embed only when permission to host a copy is confirmed.
+interface Props {
+    title: string;
+    author: string;
+    href: string;
+    embed?: string;
+}
+const { title, author, href, embed } = Astro.props;
+---
+<aside class="fd-source">
+    <p class="fd-source-label">Original source</p>
+    <p class="fd-source-title"><a href={href} target="_blank" rel="noopener">{title}</a></p>
+    <p class="fd-source-by">{author}</p>
+    {Astro.slots.has('default') && <div class="fd-source-note"><slot /></div>}
+    {embed && <iframe src={embed} title={title} loading="lazy"></iframe>}
+</aside>
