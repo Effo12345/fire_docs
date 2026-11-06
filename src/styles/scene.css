@@ -170,3 +170,12 @@ fire-scene { display: block; }
 .fd-chapters p { margin: 0.1rem 0 0; color: var(--fd-ink-dim); }
 .fd-chapter-soon { font-size: 1.15rem; font-weight: 600; color: var(--fd-ink-dim); }
 .fd-chapter-soon small { font-weight: 400; font-size: 0.85rem; }
+
+/* On a phone, fit the whole scene on screen, edge to edge, rather than scroll it sideways */
+@media (max-width: 40rem) {
+    .fd-stage { overflow-x: visible; margin-inline: calc(-1 * var(--sl-content-pad-x, 1rem)); }
+    .fd-stage svg { min-width: 0; }
+    .sl-markdown-content table { display: block; overflow-x: auto; }
+    /* KaTeX's hidden accessibility text can widen the page even though nothing shows */
+    main { overflow-x: clip; }
+}
