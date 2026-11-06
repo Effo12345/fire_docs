@@ -1,5 +1,195 @@
 ---
-title: "Rotation Sensors and Shaft Encoders"
+title: Rotation Sensors and Shaft Encoders
+description: How to measure any shaft, not only one inside a motor, with the optical shaft encoder and the rotation sensor, and how to choose between them.
 ---
+import Scene from '../../../components/Scene.astro';
+import Api from '../../../components/Api.astro';
+import Check from '../../../components/Check.astro';
+import ReadTheDocs from '../../../components/ReadTheDocs.astro';
+import Term from '../../../components/Term.astro';
+import T from '../../../components/T.astro';
+import Hl from '../../../components/Hl.astro';
 
-This page is being written.
+[Motor Encoders](../motor-encoders/) ended with two limits. The <T id="encoder">encoder</T> inside a motor counts what the motor did, so it can't see a wheel that slipped, and it can only measure shafts that a motor drives. The fix for both is to put a sensor on something that isn't driven at all: a free-spinning wheel that rolls along the floor and does nothing but turn. That's called a <T id="tracking-wheel">tracking wheel</T>, and the running robot has two of them, `forwardTracker` and `sidewaysTracker`, on ports 9 and 10. [Tracking Wheels](../../localization/tracking-wheels/) explains where to mount them and how their readings become a position on the field. This page covers the sensors that read them.
+
+The same sensors measure an arm that a rubber band lifts, a shaft in the middle of a gearbox, or anything else that turns. VEX sells two for the job. They solve the same problem in different ways, and the differences decide which one you pick.
+
+## Inside the optical shaft encoder
+
+The older of the two is the **shaft encoder**, which plugs into two <T id="adi">ADI</T> ports. It's an <Term id="optical-encoder">optical encoder</Term>: a wheel full of slots turns with the shaft, and a light on one side shines through to a light sensor on the other side. When a slot lines up, light gets through. When the solid part lines up, it doesn't. The [BLRS wiki](https://wiki.purduesigbots.com/vex-electronics/vex-sensors/3-pin-adi-sensors/encoder) describes the part this way, with a sensor on opposite sides of the slotted wheel.
+
+Counting light and dark, one after the other, gives you each <T id="tick">tick</T>. But one stream of ticks has a flaw: when it ticks, you can't tell which way the shaft turned. A shaft rocking back and forth by one slot looks the same as a shaft turning steadily forward by one slot. That's why the encoder has two signal wires and not one.
+
+## Quadrature: two channels, one quarter-slot apart
+
+The standard design behind two-wire encoders is <Term id="quadrature">quadrature</Term>. There are two light sensors, called channels, placed so that their view of the slots is offset by a quarter of a slot. Each makes its own on-and-off signal. Both signals are the same square wave, with one slightly behind the other. Which one is behind depends on the direction of the turn. (VEX doesn't publish the internals of this part, so this is how quadrature encoders work in general, and it matches the part's two wires.)
+
+Watch the disk go forward, rest, and come back. In the scene, a green dot is a counted step forward, and a red dot is a counted step backward.
+
+<Scene name="sensors/quadrature">
+The disk has 12 slots only so the picture is readable. Play it, and notice that channel <Hl c="value">A</Hl> goes high a moment before channel <Hl c="focus">B</Hl> on the way forward. On the way back, B changes first. Then flip the wires and watch every sign reverse.
+</Scene>
+
+The decoder only has to remember the previous pair of states. Going forward, the pair of readings (A, B) cycles through 00, 10, 11, 01 and back to 00. If the new pair is the next one in that cycle, count +1. If it's the previous one, count -1. That's a rule a chip can follow with no thinking, and it never confuses rocking with turning.
+
+Look at how often the count changes. Each channel changes twice per slot (going dark and coming back), and there are two channels, so the count changes four times per slot. That's why the scene's count is always about four times the number of slots passed. The part's own numbers fit this pattern, though the pieces disagree on the surface. [VEX's article on the part](https://kb.vex.com/hc/en-us/articles/360039512851-Using-the-V5-3-Wire-Optical-Shaft-Encoder) describes a wheel with 90 slots. The BLRS wiki says a full turn is 360 clicks, "not 90", as the info sheet says. Four counts for each of 90 slots is exactly 360. That's the most likely reading of both sources, but it's a reading of them, and neither one says so in those words.
+
+The PROS header agrees on 360 ticks per revolution, so one tick is one degree of shaft rotation. That is small enough for most uses, and it isn't a position with decimals: you get whole degrees.
+
+## Using it in code
+
+An encoder isn't on the running robot, so this example declares its own, labeled as an example. It uses ADI ports C and D, which don't clash with `limitSwitch` on A and `armPot` on B:
+
+```cpp
+// Example only, not part of the running robot. Top wire goes to port C
+pros::adi::Encoder shaftEncoder('C', 'D', false);
+```
+
+The constructor <Api sym="adi/Encoder" /> takes the "top" wire first, which the header defines as the wire on the side with the removable cover facing up, then the bottom wire. The last argument, `reversed`, flips the sign, which is the same as swapping the two wires in the scene. The two ports can't be just any pair. The [PROS kernel source](https://github.com/purduesigbots/pros/blob/develop-pros-4/src/devices/vdml_ext_adi.c) rejects a pair unless the ports are next to each other and the lower one is A, C, E or G, which the header doesn't mention. So C and D work, and B and C don't.
+
+Reading it takes two functions. <Api sym="adi/get_value" /> returns the count, and <Api sym="adi/reset" /> sets it back to zero:
+
+```cpp withprev
+void opcontrol() {
+    shaftEncoder.reset();
+
+    while(true) {
+        pros::lcd::print(0, "ticks: %d", shaftEncoder.get_value());
+
+        pros::delay(10);
+    }
+}
+```
+
+Printing to the screen works the way [the first program](../../first-robot-program/inside-a-pros-project/#printing-a-value-to-the-brain-screen) taught, and the loop has its [delay](../../first-robot-program/driver-control/#why-the-loop-has-a-delay) for the usual reason. The ADI ports hand the Brain new data every 10 ms (the header says so), so reading faster than that gains nothing.
+
+The encoder is a <T id="relative-sensor">relative sensor</T>. BLRS says its count goes back to zero whenever the Brain restarts, so it knows how far the shaft has turned since the program began, and nothing about where the shaft was before. Turn it by hand while the robot is off and it won't know.
+
+## Inside the rotation sensor
+
+The **rotation sensor** takes a different approach. It plugs into a Smart Port, so unlike an ADI part, it does its own measuring and sends finished numbers. There are no slots. According to the BLRS wiki, it's a <Term id="magnetic-encoder">magnetic encoder</Term>: a Hall effect sensor, a chip whose output changes with a magnetic field, measures the field of two magnets on the shaft, and the field tells it the shaft's angle. Another chip counts the full turns. That wiki is third-party, and VEX doesn't describe the inside in detail, so treat this as a good description and not a spec.
+
+The magnetic design has a consequence you can use. The sensor reads the *direction of a field*, which depends on where the shaft is right now, not on anything counted since startup. So the angle is always known the moment power returns, and the angle survives power-off (VEX's API documentation says so). A sensor like that is an <Term id="absolute-encoder">absolute encoder</Term>, a close relative of the <T id="absolute-sensor">absolute sensor</T> idea from [Why Robots Need Sensors](../why-sensors/).
+
+The sensor measures in <Term id="centidegree">centidegrees</Term>: hundredths of a degree. One full turn is 36,000 centidegrees. This is a unit the sensor *reports* in, not a promise about how finely it can measure. Writing a number with extra digits doesn't make it more precise, as [Accuracy, Precision and Resolution](../why-sensors/#accuracy-precision-and-resolution) said. VEX's product page lists a precision of "0.088", with no unit shown, which would likely mean degrees (about 9 centidegrees). That is unconfirmed, so measure your own sensor if it matters: turn the shaft slowly by hand and watch how the reading steps.
+
+The shaft goes through the sensor, and the [VEX API docs](https://api.vex.com/v5/home/python/Sensing/rotation-sensor.html) list it as taking 1/8 inch and 1/4 inch shafts.
+
+## `pros::Rotation`
+
+The tracking wheels on the running robot are already declared:
+
+```cpp
+pros::Rotation forwardTracker(9);
+```
+
+The port number goes straight into the constructor, and a negative port number (such as -9) reverses the sensor's direction. You can also flip it later with <Api sym="rotation/set_reversed" />. Three reading functions matter, and the difference between the first two is the main thing to learn on this page:
+
+- <Api sym="rotation/get_angle" /> is where the shaft points *right now*, in centidegrees from 0 up to just under 36,000. After 35,999 it wraps back to 0.
+- <Api sym="rotation/get_position" /> is the total the shaft has turned, in centidegrees, and it doesn't wrap. Two and a half turns forward reads about 90,000. Turn back and it goes down.
+- <Api sym="rotation/get_velocity" /> is how fast it's turning, in centidegrees per second.
+
+The angle is what's useful when you care about a pointing direction, such as a turret. The position is what you want for distance, because a tracking wheel that rolls 30 inches has gone around several times, and you need every one of those turns counted.
+
+<Scene name="sensors/angle-vs-position">
+Play it. The <Hl c="value">angle</Hl> climbs and wraps at 360 degrees. The <Hl c="focus">position</Hl> never wraps. The chart is in degrees and the readouts below it are in centidegrees. The shaft holds still while the power is off. Then slide the setting to 1 and see what position does after power returns.
+</Scene>
+
+### The position at power on, and two functions with confusing names
+
+The scene's setting matters because the available sources don't agree on what position reads when the program starts. The BLRS wiki says it resets to zero every time the sensor is turned on. VEX's documentation says it restarts from the sensor's current angle each time a program runs. Neither source says which one holds for your firmware, so don't rely on either.
+
+You don't have to know. If you call a reset in `initialize()`, the answer becomes zero either way. But the Rotation class has two reset functions, and one of them does something you may not expect:
+
+- <Api sym="rotation/reset_position" /> sets the position to 0. This is almost always what you meant.
+- <Api sym="rotation/reset" /> sets the position to match the current *angle*. If the shaft happens to be at 210 degrees, the position becomes 21,000, not zero.
+
+```cpp
+void initialize() {
+    pros::lcd::initialize();
+
+    // Position to zero, whatever it was at power on
+    forwardTracker.reset_position();
+    sidewaysTracker.reset_position();
+}
+```
+
+The header describes the second function's behavior in words ("the same as the Rotation Sensor angle"), and its name sounds like it would reset to zero. Reading the real description before calling something with a short name is a habit worth building.
+
+### Data rate
+
+The sensor sends new data on a schedule, and one function in the class changes how often.
+
+<ReadTheDocs>
+Open the Rotation Sensor group in the PROS API. Find the function that changes how often the sensor sends data. What are the smallest value it accepts and the step size, and what does the header say about polling your code faster than the default?
+</ReadTheDocs>
+
+<Check prompt="What did the header say about the rate, and why can't a faster polling loop beat it?">
+The function is <Api sym="rotation/set_data_rate" />. The rate has a minimum of 5 ms, in steps of 5 ms, and the default is 10 ms. The header also says the values are copied to your code at 10 ms, so the new reading you see can't arrive faster than that. Polling more often than every 10 ms just returns the same number twice.
+</Check>
+
+## Turning a reading into inches
+
+A tracking wheel measures the floor through its own circumference. The wheels on the running robot are 2.75 inches across, so one turn rolls it
+
+$$
+\pi \times 2.75 \approx 8.64 \text{ inches}
+$$
+
+and the rule is the same one [Motor Encoders](../motor-encoders/#from-motor-degrees-to-inches) used, with one less step: a tracking wheel is on the shaft itself, so there's no gear ratio. The position in centidegrees divided by 36,000 is wheel revolutions, and revolutions times the circumference is inches.
+
+```cpp withprev
+const double TRACKER_DIAMETER = 2.75;  // inches
+
+double getForwardInches() {
+    double revolutions = forwardTracker.get_position() / 36000.0;
+
+    return revolutions * M_PI * TRACKER_DIAMETER;
+}
+```
+
+A position of 125,000 centidegrees is 3.47 turns, which is about 30.0 inches. The division by `36000.0` has a decimal point on purpose: `forwardTracker.get_position() / 36000` would be <T id="integer-division">integer division</T> ([explained here](../../cpp-foundations/math-and-decisions/#the-integer-division-surprise)) and throw away every partial turn.
+
+If the sensor fails, <Api sym="rotation/get_position" /> returns `PROS_ERR` (2,147,483,647) and sets `errno`, the same pattern [Why Robots Need Sensors](../why-sensors/) showed. Run that through the function above and a pulled cable reads as over 500,000 inches. Check for the error first, the way Why Robots Need Sensors did:
+
+```cpp withprev
+void printForwardInches() {
+    int32_t position = forwardTracker.get_position();
+
+    if(position == PROS_ERR) {
+        pros::lcd::print(1, "tracker error %d", errno);
+        return;
+    }
+
+    pros::lcd::print(1, "inches: %.2f", position / 36000.0 * M_PI * TRACKER_DIAMETER);
+}
+```
+
+For the ADI shaft encoder, the only change is that a tick is one degree, so use 360. One tick is 8.64 / 360 = 0.024 inches on that same wheel. For the rotation sensor, one centidegree would be 0.00024 inches. Don't read that as accuracy: it's the unit, and the sensor's real resolution is the open question from earlier.
+
+## Choosing between them
+
+Both sensors turn a shaft into a number. The choice depends on what you need to survive and how much you can plug in.
+
+| | Rotation sensor | ADI shaft encoder |
+|---|---|---|
+| Port | One Smart Port | Two ADI ports |
+| Principle | Magnets and a Hall effect sensor | Light through a slotted wheel |
+| Reports | Centidegrees: angle, position, velocity | Ticks, 360 per turn |
+| Angle at power on | Known (absolute) | Unknown (relative, starts at zero) |
+| New data | Every 10 ms. A 5 ms setting exists, but values still reach your code every 10 ms | Every 10 ms |
+| Direction | Sign of the count | Sign of the count, from quadrature |
+
+Use the rotation sensor when you need the angle after a reboot, when you have a Smart Port free, or when you want velocity without computing it yourself. Use the shaft encoder when Smart Ports are scarce and ADI ports are free, when a 360-count measurement is fine, and when you'll zero it on startup anyway. A tracking wheel works with either, since distance only needs a position counted from the start.
+
+Neither one is *accurate* just because it has many digits. A tracking wheel measures what its wheel did. If it lifts off the floor, bounces over a seam, or sits on a loose mount, it reports a distance the robot never traveled, as [Tracking Wheels](../../localization/tracking-wheels/) shows. The sensor is the easy half.
+
+Both of these measure a shaft that can spin forever. For a mechanism that only swings through a short arc, like the robot's arm, there's a cheaper sensor that never needs counting at all: the [potentiometer](../potentiometers/).
+
+<Check prompt="A teammate wires a rotation sensor to a lift and calls `lift.reset()` in `initialize()`, expecting the position to start at zero. The lift starts the match at a different height each time. What goes wrong, and which function should they use?">
+`reset()` sets the position to match the current angle, so the position starts at whatever the shaft's angle is, which differs each time the lift sits at a different height. They should call `reset_position()`, which sets it to 0. If they care about the absolute height instead, they can read `get_angle()` and compute from it, since the angle is known at power on.
+</Check>
+
+<Check prompt="An ADI shaft encoder on a shaft turned in one direction reads 450 ticks. How many turns is that, and how many of the disk's 90 slots passed the sensors?">
+There are 360 ticks per turn, so 450 / 360 = 1.25 turns. Each slot gives four ticks, so 450 / 4 = 112.5 slots passed. That agrees: 1.25 turns of a 90-slot wheel is 1.25 x 90 = 112.5 slots.
+</Check>
