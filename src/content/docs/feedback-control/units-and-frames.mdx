@@ -1,5 +1,161 @@
 ---
-title: "Units and Coordinate Frames"
+title: Units and Coordinate Frames
+description: Keeping units straight, what a radian is, how field and robot coordinates differ, and how to wrap angles without breaking them.
 ---
+import Scene from '../../../components/Scene.astro';
+import Api from '../../../components/Api.astro';
+import Check from '../../../components/Check.astro';
+import Term from '../../../components/Term.astro';
+import T from '../../../components/T.astro';
+import Hl from '../../../components/Hl.astro';
+import ReadTheDocs from '../../../components/ReadTheDocs.astro';
 
-This page is being written.
+Corrections are only as good as the numbers going in, and numbers go wrong quietly: the right value in the wrong unit, or the right angle measured from the wrong direction. This page covers both, so the math ahead doesn't surprise you.
+
+## Units
+
+In September 1999, NASA's Mars Climate Orbiter was lost at Mars. Ground software from Lockheed Martin reported thruster impulse in pound-force seconds, and NASA's navigation software expected newton-seconds. In a file both are just numbers, so nothing complained. A pound-force is about 4.45 newtons, so the estimates were off by that factor. The craft was meant to pass Mars at about 226 km and came in near 57 km, below the lowest altitude thought survivable (80 km).
+
+Your robot has the same hazard, because PROS hands you numbers in a mix of units. These are the ones this guide uses:
+
+| Quantity | Unit | Where it shows up |
+|---|---|---|
+| Distance | inches | `getDriveDistance()`, field coordinates |
+| Heading, turning | degrees | <Api sym="imu/get_heading" />, `get_rotation` |
+| Motor voltage | millivolts, -12000 to 12000 | <Api sym="motors/move_voltage" /> |
+| Time | milliseconds | <Api sym="rtos/delay" /> |
+| Motor speed | RPM | <Api sym="motors/get_actual_velocity" /> |
+| Rotation sensor | centidegrees (hundredths of a degree) | `get_angle`, `get_position`, and `get_velocity` (per second) |
+
+Two rows bite. `pros::delay(2)` waits 2 milliseconds, not 2 seconds, and a rotation sensor position of 9000 is a quarter turn ([Rotation Sensors](../../sensors/rotation-and-shaft-encoders/)). A motor's own encoder depends on its setup, per [Motor Encoders](../../sensors/motor-encoders/#which-unit-are-the-numbers-in).
+
+<Term id="unit-conversion">Unit conversion</Term> is multiplying by 1. A turn is 36,000 centidegrees and also 360 degrees, so $\frac{360\text{ degrees}}{36000\text{ centidegrees}}$ is 1 in disguise, and the centidegrees cancel. If the unit you want doesn't appear, the factor is upside down. The wheel math in [Motor Encoders](../../sensors/motor-encoders/#from-motor-degrees-to-inches) was a chain of such factors.
+
+Code doesn't check units, so put them in the name or a comment:
+
+```cpp
+double driveTargetInches = 24.0;
+double turnTargetDegrees = 90.0;
+int timeoutMs = 2000;
+```
+
+## Radians
+
+The 360 in degrees is a human choice, because it divides nicely. A more natural measure comes from bending the circle's radius along its edge. The angle that covers is one <Term id="radian">radian</Term>, about 57.3 degrees. A full circle fits 6.28 of them, which is $2\pi$.
+
+<Scene name="feedback-control/radian-unroll">
+Drag the angle. The <Hl c="focus">yellow arc</Hl> is straightened into the line below, marked in radius lengths. Read where it ends at 90, 180 and 360 degrees.
+</Scene>
+
+So $\text{arc} = r \times \theta$, where $\theta$ (theta) is the angle in radians. That's why radians are preferred: a wheel of radius 1.625 in turning 2 radians rolls 3.25 in, with no conversion factor. Half a circle is $\pi$, so converting is a multiplication by 1:
+
+$$
+\text{radians} = \text{degrees} \times \frac{\pi}{180}
+$$
+
+```cpp
+#include <numbers>
+
+double degreesToRadians(double degrees) {
+    return degrees * std::numbers::pi / 180.0;
+}
+
+double radiansToDegrees(double radians) {
+    return radians * 180.0 / std::numbers::pi;
+}
+```
+
+`std::numbers::pi` comes from C++20's [`<numbers>`](https://en.cppreference.com/w/cpp/numeric/constants). Every trig function in [`<cmath>`](https://en.cppreference.com/w/cpp/header/cmath) takes radians, so `std::sin(90.0)` is not 1, and it compiles anyway. What those functions compute is for [The Math of Position Tracking](../../localization/position-tracking-math/). Keep degrees at the edges (sensors, your targets) and convert only at the `<cmath>` call.
+
+## Coordinate frames
+
+A position means nothing without a starting point and directions to measure along. A <Term id="coordinate-frame">coordinate frame</Term> is that choice. This guide uses two.
+
+The <Term id="field-frame">field frame</Term> is fixed to the field. Its origin is a field corner, x points right and y points up the field, in inches, from 0 to 144 each way. It never moves.
+
+The <Term id="robot-frame">robot frame</Term> is fixed to the robot, with its origin at the center. Forward is always straight ahead and right is always to the robot's right, wherever the robot sits on the field. A point's field coordinates don't change when the robot drives past it. Its robot coordinates change constantly.
+
+<Scene name="feedback-control/two-frames">
+The <Hl c="target">green point</Hl> stays put on the field, left. On the right it's drawn as the robot sees it. Turn the heading slider: the field point doesn't move, but its robot-frame numbers do. A negative "ahead" means behind, and a negative "right" means left. Slide the point onto the robot and both numbers read about 0.
+</Scene>
+
+Where the robot is and which way it faces make its <Term id="pose">pose</Term>: x, y and heading. Converting a point between frames takes trigonometry, which [position tracking](../../localization/position-tracking-math/) covers.
+
+### Which way is zero?
+
+Heading needs its own convention, and there are two in common use. The IMU uses compass style, as [The Inertial Sensor](../../sensors/inertial-sensor/#heading-versus-rotation) showed: 0 points along +y, up the field, and heading grows clockwise as seen from above. Math class uses <Term id="standard-position">standard position</Term>: 0 points along +x, and angles grow counterclockwise. They disagree on both the zero and the direction. Converting is one line:
+
+$$
+\text{standard} = 90 - \text{heading}
+$$
+
+Compass 0 (up the field) becomes 90, and compass 90 (to the right) becomes 0. The same subtraction converts back.
+
+The sign comes from the <Term id="right-hand-rule">right-hand rule</Term>: point your right thumb along an axis, and your fingers curl in the positive direction of rotation. Thumb up out of the field toward you, the fingers curl counterclockwise, which is standard position. A clockwise-positive IMU is the same rule with the thumb pointing down into the field.
+
+Neither convention is wrong, but mixing them is a classic bug. A robot that turns the wrong way, or follows a mirrored path, is often one piece of code counting counterclockwise and another counting clockwise. Check signs before touching gains.
+
+## Wrapping angles
+
+An angle and the same angle plus a full turn point the same way, but the numbers differ. <T id="wraparound">Wraparound</T> is the jump between them, and <Term id="angle-wrapping">angle wrapping</Term> is bringing a number back into a fixed range. [The Inertial Sensor](../../sensors/inertial-sensor/#wraparound-and-the-shortest-turn) built `shortestTurn`. Two ranges matter:
+
+- **0 up to 360**, like `get_heading`. It has no negative numbers, so it suits display and compass-style targets: "face 90".
+- **-180 to 180**, like the output of `shortestTurn`. Zero sits in the middle, and the sign says which way to turn, so it suits differences, which is what a turning controller needs.
+
+```cpp
+// 0 up to 360, whatever went in
+double wrapDegrees(double degrees) {
+    double wrapped = std::fmod(degrees, 360.0);
+
+    if(wrapped < 0.0) {
+        wrapped += 360.0;
+    }
+
+    return wrapped;
+}
+```
+
+The -180 to 180 version is `shortestTurn`. In radians the ranges are 0 to $2\pi$ and $-\pi$ to $\pi$, and [`std::remainder`](https://en.cppreference.com/w/cpp/numeric/math/remainder) lands directly in the second:
+
+```cpp withprev
+// Radians, from -pi to pi
+double wrapRadians(double radians) {
+    return std::remainder(radians, 2.0 * std::numbers::pi);
+}
+```
+
+Wrap the difference, not the total. `get_rotation` is useful because it doesn't wrap: 450 means a quarter turn past a full circle, and wrapping it to 90 loses that. Anything that adds or subtracts angles wants the smooth number. Wrap when you compare, as `shortestTurn` does, and leave the stored value alone.
+
+Averaging is a trap. Headings 350 and 10 are 20 degrees apart across the seam, so their average should be 0, but $(350 + 10) / 2 = 180$ is exactly backward. Instead, start at one heading and go half the short way to the other.
+
+```cpp withprev
+double shortestTurn(double target, double current);  // from the inertial sensor page
+
+double averageHeading(double first, double second) {
+    return wrapDegrees(first + shortestTurn(second, first) / 2.0);
+}
+```
+
+<Scene name="feedback-control/wrap-average">
+Set the headings to 350 and 10. The <Hl c="error">dashed red hand</Hl> is the plain average and points the wrong way. The <Hl c="target">green hand</Hl> sits between the two blue ones. Then try 80 and 100, where both agree, and drag until they part ways.
+</Scene>
+
+This works for two headings. For many, the usual fix treats each angle as a point on the circle, which is trigonometry again.
+
+<ReadTheDocs>
+Open the cppreference page for `std::remainder`, then compare it with `std::fmod`. What is different about the result's sign, and why does that make `remainder` fit wrapping to -180 to 180?
+</ReadTheDocs>
+
+The next page, [Closing the Loop](../closing-the-loop/), puts these numbers to work: the robot measures where it is, compares it with where it should be, and acts.
+
+<Check prompt="A rotation sensor's `get_position()` returns 18000. How many degrees, and how many radians?">
+Divide by 100 to get 180 degrees, since centidegrees are hundredths of a degree. In radians that's $\pi$, about 3.14.
+</Check>
+
+<Check prompt="The robot's compass heading is 120. What is its standard-position angle?">
+$90 - 120 = -30$, which wraps to 330. That's 30 degrees below the +x axis, which matches compass 120: 30 degrees clockwise past due right.
+</Check>
+
+<Check prompt="A robot at (10, 10) in the field frame faces compass heading 0 (up the field). A target is at (10, 30). Where is it in the robot frame? Then the robot turns to heading 90. Where is the target now?">
+At heading 0, the target is 20 in straight ahead and 0 right. At heading 90 the robot faces +x, so the target at +y is now on its left: 0 ahead, 20 in to the left, which is -20 right. Its field coordinates didn't change.
+</Check>
