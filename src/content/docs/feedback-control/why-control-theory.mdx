@@ -1,5 +1,101 @@
 ---
-title: "Why Control Theory Matters"
+title: Why Control Theory Matters
+description: Why a robot that only follows a plan drifts, what a disturbance is, how engineers draw a control system, and what feedback can and can't fix.
 ---
+import Scene from '../../../components/Scene.astro';
+import Api from '../../../components/Api.astro';
+import Check from '../../../components/Check.astro';
+import ReadTheDocs from '../../../components/ReadTheDocs.astro';
+import Hl from '../../../components/Hl.astro';
+import Term from '../../../components/Term.astro';
+import T from '../../../components/T.astro';
 
-This page is being written.
+The timed routine from [Your First Autonomous](../../first-robot-program/first-autonomous/#why-the-same-program-lands-in-different-places) landed somewhere new on every run, and [Why Robots Need Sensors](../../sensors/why-sensors/) showed that measuring fixes part of it. This page is about what's left over: why a robot that follows a plan is wrong in ways a single sensor check doesn't cure, and what the field built to deal with that.
+
+## Errors add up
+
+A real autonomous is a route, not one drive. A turn is relative: "turn 90 degrees right" means 90 from wherever the robot is facing now. So an angle error from the first turn isn't forgotten at the second. The second turn inherits it, and adds its own.
+
+You've seen the rule of thumb already: each degree of heading error moves the robot about 1.7 inches sideways per 100 inches driven. This scene runs a four-leg route with the same small error in every turn.
+
+<Scene name="feedback-control/route-drift">
+The <Hl c="target">green dashes</Hl> are the plan. Each turn comes out a few degrees past 90, and the numbers on the right show how far off the robot is heading on each leg. Press play at the starting 3 degrees. Then set the turn error to 0 and drag the leg shortfall to 5 percent, and compare the two <Hl c="error">misses</Hl>.
+</Scene>
+
+The legs are 72, 60, 48 and 36 inches, and the robot ends 5.4 inches from where it should. Its heading is off by 0 degrees on leg 1, then 3, 6 and 9. Each leg starts where the last one ended, facing the wrong way a little more than before.
+
+Now compare the sliders. Legs that are 5 percent short only cost 1.7 inches at the end, and the route keeps its shape, just a bit smaller. A heading error rotates everything after it. So a stop-at-72-inches loop from [Motor Encoders](../../sensors/motor-encoders/) fixes one slider and leaves the other alone. A route needs a measurement for each thing that can go wrong: the encoders for distance, and for heading the [inertial sensor](../../sensors/inertial-sensor/).
+
+## The world pushes back
+
+The scene above made one mistake per turn and nothing else. A real run has more going on. Another robot clips yours. You pick up a game piece, and the robot is heavier. The tile is dustier than at practice. A motor that has been working hard gets hot and cuts the current it will allow, as [the first autonomous page](../../first-robot-program/first-autonomous/#why-the-same-program-lands-in-different-places) described. That page also explains why a low battery is a weaker suspect than it sounds.
+
+Engineers have one word for all of these. A <Term id="disturbance">disturbance</Term> is anything from outside that pushes the system off its course without being commanded. The robot didn't choose it, and the program didn't see it happen.
+
+Here are two robots driving 72 inches down a line. A defender bumps both partway, which turns each one by some angle. The top robot is the timed kind. The bottom one keeps comparing where it is to where it should be.
+
+<Scene name="feedback-control/bump-recovery">
+Press play at the starting 10 degree bump. Then set the bump to 0 and raise it again, to 15. Watch when the bottom robot starts steering, and what its <Hl c="value">path</Hl> looks like compared with the top one.
+</Scene>
+
+With the 10 degree bump, the timed robot ends 7.3 inches from the target, and at 15 degrees it ends 11.0 inches away. It drives its tuned 2.0 seconds in whatever direction it was knocked toward, and it can't tell. The bottom robot ends within a tenth of an inch of the target at either size. At 10 degrees it gets pushed about 0.9 inches off the line on the way, and at 15 about 1.4.
+
+How it steers back is a black box on this page, and [Closing the Loop](../closing-the-loop/) opens it. What matters here is that it never needs to know a bump happened. It only knows it's an inch off the line right now. So one idea covers a defender, a heavy load and a hot motor, with no code for any of them.
+
+## Drawing a control system
+
+Engineers draw this situation as a **block diagram**: boxes for the parts, arrows for what passes between them. The scene builds one for your drive, then gives the same boxes new labels.
+
+<Scene name="feedback-control/system-diagram">
+Watch the diagram build. Find the point where the sensor and the arrow back to the code appear, and ask which box could notice a disturbance before that, and which could after. Then pay attention to which block gets which name on the car, the house and the drone.
+</Scene>
+
+Each word in the diagram is vocabulary a judge or an engineer will expect from you:
+
+- The **plant** is the physical thing being controlled. For your drive, it's the whole drivetrain, with its wheels, weight and friction. The word comes from industry, where it meant the factory or machine being run.
+- The code sends a command to the <T id="actuator">actuator</T>, here the drive motors. The <Term id="actuator-output">actuator output</Term> is what they really deliver to the plant, mainly torque, and it can differ from the command. You asked for 12000 mV, and a motor that has cut its current limit delivers less push than the same command did when it was cool.
+- A <T id="sensor">sensor</T> reads the result and sends the measurement back to the code. A plant, its actuators, its sensors and the code that decides, joined in a loop, make a <Term id="control-system">control system</Term>.
+
+The <Hl c="error">disturbance</Hl> arrow goes into the plant, not the code. The code can only learn of it through the sensor, which is why the arrow back from the sensor does most of the work.
+
+<ReadTheDocs>
+Open <Api sym="motors/get_voltage" /> and read the functions around it that report what a motor is doing right now. Find what `get_voltage` reports and its unit, then find the functions that report the current the motor draws and the torque it makes, with their units. Which of the three would you print to see a motor straining against a wall?
+</ReadTheDocs>
+
+One of the checks below answers it.
+
+The field that studies these diagrams is <Term id="control-theory">control theory</Term>: how to make a system reach a target and hold it, by measuring it and correcting it, and how well that works. It began as an engineering problem. In 1868 James Clerk Maxwell published [On Governors](https://doi.org/10.1098/rspl.1867.0055), a mathematical study of why some steam engine speed governors held steady and others swung wildly. A governor is a speed controller made of spinning weights, and it fits the same diagram.
+
+The diagram runs far more than robots. A car's cruise control reads the speed and adjusts the throttle, and a hill is its disturbance. A thermostat reads the temperature and switches a furnace. A quadcopter is the extreme case: it's unstable, so without constant correction from a flight controller reading a gyroscope it tips over within moments. Some plants can only be run in a loop.
+
+## What it buys, and what it doesn't
+
+What a closed loop buys is <T id="repeatability">repeatability</T> that doesn't depend on the day. An <T id="open-loop">open loop</T> routine is only right under the conditions it was tuned for, so a change in the robot's weight or the floor means retuning it. A closed loop needs a working sensor and a way to act, not an accurate model of the robot, which is why a team can tune a drivetrain without writing down its physics.
+
+It also gives you something to say in an interview. "Our autonomous drives closed loop on the wheel encoders and holds heading with the inertial sensor, so a bump in the middle of a move gets corrected" says more than "we use PID". It names your plant, your sensors and your disturbance.
+
+Feedback doesn't fix everything, though, and three limits matter on a robot.
+
+**A bad mechanism.** A loop can only push. A drivetrain that flexes, a wheel that wobbles, or an arm with <T id="backlash">backlash</T> have problems in the plant itself, and no controller removes play from a gearbox. At best the controller hunts around the slack.
+
+**A sensor that lies.** The loop trusts its measurement completely. An encoder counts the rotation of the motor, not the movement of the robot, so <T id="wheel-slip">wheel slip</T> looks like a perfect drive. An inertial sensor that has <T id="drift">drifted</T> will steer the robot confidently to the wrong heading. Feedback moves the question from "is my motor consistent?" to "is my sensor right?".
+
+**A target out of reach.** Motors top out at 12000 mV. Ask for 24 inches in a tenth of a second, and the command sits at the limit. The robot is doing the most it can, and no controller changes that.
+
+A badly built loop can also be worse than none. That's for [Closing the Loop](../closing-the-loop/), but first [Units and Coordinate Frames](../units-and-frames/) makes sure the numbers going into a loop mean what you think they mean.
+
+<Check prompt="A route's turns each come out 2 degrees past 90, always in the same direction. How far off is the robot heading on the fourth leg, and about how far sideways does that 36 inch leg alone push it?">
+The first leg is fine, and each of the three turns adds 2 degrees, so the fourth leg is 6 degrees off. By the rule of thumb of 1.7 inches per 100 inches per degree, that leg moves the robot 6 times 1.7 times 0.36, about 3.7 inches sideways. The earlier legs added their own error before it, so the end of the route is further off than that.
+</Check>
+
+<Check prompt="A motor pushes against a wall and can't turn. From the ReadTheDocs above, which reading changes most, and which one barely moves?">
+`get_voltage` reports the millivolts being delivered to the motor, which stays near what you commanded, so it barely moves. `get_current_draw` (mA) and `get_torque` (Nm) are what rise as the motor strains. That is the gap between a command and an actuator output.
+</Check>
+
+<Check prompt="An arm lifts a game piece, and a potentiometer on its joint reports the angle. Name the plant, the actuator, the sensor and a disturbance.">
+The plant is the arm, the actuator is the motor that lifts it, and the sensor is the potentiometer. The weight of the game piece is a disturbance, since it pushes on the plant without being commanded, and so is a bump from another robot. The actuator output is the torque the motor delivers at the joint.
+</Check>
+
+<Check prompt="A drive is closed loop on its wheel encoders. On a slick floor the wheels spin and the robot barely moves, but the loop reports 24 inches and stops. Which of the three limits is this, and what could help?">
+It's a sensor that lies: the encoder measures the wheel, and what you care about is the robot over the floor. A different measurement of the thing you want helps, such as a free-spinning tracking wheel that rolls along the floor, which [Rotation Sensors and Shaft Encoders](../../sensors/rotation-and-shaft-encoders/) introduces, or driving more gently so the wheels grip. A tighter loop on the same encoders would make no difference.
+</Check>

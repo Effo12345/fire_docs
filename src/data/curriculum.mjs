@@ -71,7 +71,6 @@ export const curriculum = [
 
 // Pages still being written. They keep their URLs so links into them work, but stay out of the sidebar
 const unwritten = new Set([
-    'feedback-control/why-control-theory',
     'seeing-inside/brain-screen',
     'seeing-inside/sd-card-logging',
     'seeing-inside/tasks',
