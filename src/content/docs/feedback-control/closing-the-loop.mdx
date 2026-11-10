@@ -1,5 +1,156 @@
 ---
-title: "Closing the Loop"
+title: Closing the Loop
+description: What a closed loop is, the measure, compare and act cycle, and bang-bang control, the first controller everyone writes and the reason it never quite works.
 ---
+import Scene from '../../../components/Scene.astro';
+import Api from '../../../components/Api.astro';
+import Check from '../../../components/Check.astro';
+import ReadTheDocs from '../../../components/ReadTheDocs.astro';
+import Hl from '../../../components/Hl.astro';
+import Term from '../../../components/Term.astro';
+import T from '../../../components/T.astro';
 
-This page is being written.
+The sensors section ended with a robot that rolls past its target. `driveUntil(24)` on [Motor Encoders](../../sensors/motor-encoders/#driving-until-a-distance) reads the wheels, notices it has gone far enough, cuts the power, and overshoots. That program is more interesting than it looks, because it does something the timed routine from [your first autonomous](../../first-robot-program/first-autonomous/) couldn't. It looks.
+
+A timed move is <T id="open-loop">open loop</T>: the program picks its commands ahead of time and never learns what happened. A <Term id="closed-loop">closed loop</Term> is the opposite. It measures the result and uses the measurement to decide the next command. Using a measurement of what a system did to decide what it does next is called <Term id="feedback">feedback</Term>, and the rest of this section is about doing it well. You've been writing closed loops since the sensors section, without the name.
+
+## Measure, compare, act
+
+Every closed loop goes around the same three steps. Take the 24 inch drive.
+
+- **Measure.** Read a sensor. For `getDriveDistance()` that's how far the wheels say the robot has gone. The measured quantity is the <Term id="process-variable">process variable</Term>.
+- **Compare.** Hold the measurement against what you want. The value you want is the <Term id="setpoint">setpoint</Term>, here 24 inches. Setpoint minus measurement is the <Term id="control-error"><Hl c="error">error</Hl></Term>, how far there is still to go. Positive means the robot is short, and negative means it has gone past.
+- **Act.** Pick a command from the error and send it to the motors. What a controller produces is the <Term id="control-output">control output</Term>, and for the drive it's a voltage in millivolts.
+
+Then wait a moment and go around again. The scene runs the same 24 inch drive twice. First open loop, with a command picked ahead of time, so only the last box has anything in it. Then closed, with the numbers going around the cycle one step at a time.
+
+<Scene name="feedback-control/loop-cycle">
+A simple model, not your robot. Scrub back and forth. Find the moment the open loop run ends on the second day, then watch what the closed loop does with the same heavy robot.
+</Scene>
+
+The open loop run isn't a bad program. It was tuned, and on the day it was tuned it works. Its trouble is that the world changed and nothing in the program could find out. The closed loop doesn't need the world to stay the same, because it reads what the world did.
+
+The closed loop still overshoots, though. The rule in its act box is the crudest one possible, and the rest of the page is about that rule.
+
+## The loops you've already written
+
+Name the three steps in each loop from the sensors section.
+
+- **`driveUntil`** measures wheel distance, compares it with the target in the `while` condition, and acts by driving at 6000 mV or stopping.
+- **The distance sensor stop** on [the Distance Sensor](../../sensors/distance-sensor/#stopping-at-a-wall) measures millimeters to the wall, compares with `stopMm`, and acts the same way.
+- **`turnToHeading`** on [the Inertial Sensor](../../sensors/inertial-sensor/#wraparound-and-the-shortest-turn) measures heading, uses `shortestTurn` to get the error, and acts with `4000` or `-4000` depending on its sign, and with nothing once it's within 5 degrees.
+
+Each one picks its output from a tiny fixed menu, based only on which side of the target the robot is on. The size of the error never matters. Being 20 inches short and being 2 inches short get the same push. That is a controller, a blunt one, and it has a name.
+
+## Bang-bang control
+
+<Term id="bang-bang-control">Bang-bang control</Term> uses only two or three outputs, usually full power each way, and switches between them by the sign of the error. Your `turnToHeading` is one. `driveUntil` is a one-sided one, because it can push forward but never back.
+
+Here's a full version for driving, with both directions and a stop band, a stretch around the target where it does nothing. It also needs a way to finish: the robot is still moving when it first enters the band, so "inside the band" isn't enough. It waits until the robot is close and nearly still, and gives up after a time limit.
+
+```cpp
+// Full forward, full reverse or off, chosen only by which side of the target we're on
+void driveBangBang(double target) {
+    resetDriveDistance();
+
+    const double STOP_BAND = 1.0;
+    const double STILL_SPEED = 1.0;
+    const int TIMEOUT_MS = 3000;
+
+    double lastDistance = 0.0;
+    std::uint32_t startTime = pros::millis();
+
+    while(pros::millis() - startTime < TIMEOUT_MS) {
+        double distance = getDriveDistance();
+        double error = target - distance;
+
+        // Inches per second, assuming the loop really takes 10 ms
+        double speed = (distance - lastDistance) / 0.01;
+        lastDistance = distance;
+
+        if(std::fabs(error) <= STOP_BAND && std::fabs(speed) < STILL_SPEED) {
+            break;
+        }
+
+        int voltage = 0;
+        if(error > STOP_BAND) {
+            voltage = 12000;
+        }
+        else if(error < -STOP_BAND) {
+            voltage = -12000;
+        }
+
+        leftDrive.move_voltage(voltage);
+        rightDrive.move_voltage(voltage);
+
+        pros::delay(10);
+    }
+
+    leftDrive.move_voltage(0);
+    rightDrive.move_voltage(0);
+}
+```
+
+The output is in millivolts, so 12000 is the most the motors can be given. It uses <Api sym="motors/move_voltage" /> rather than `move_velocity`, and the [PID page](../pid/#why-move_voltage) explains why. The loop ends with <Api sym="rtos/delay" /> for 10 ms, as on [Driver Control](../../first-robot-program/driver-control/#why-the-loop-has-a-delay), and uses [`pros::millis()`](https://purduesigbots.github.io/pros-doxygen-docs/group__c-rtos.html#gacd8d13c328bebdf9eddea27ff9448c2d) for the time limit, as on the distance sensor page.
+
+Set `STOP_BAND` to 0 and the exit never fires, because the error is almost never exactly 0 and the robot is almost never still. The robot swings back and forth until the timeout cuts in. Try that in the scene before you try it on a robot.
+
+## Why it oscillates
+
+The scene below is a model of that rule. The drivetrain has momentum: full power builds speed gradually, and cutting the power doesn't stop it. The <Hl c="target">green line</Hl> is the 24 inch setpoint and the shaded stripe is the stop band. The graph under the position is the <Hl c="focus">output</Hl>, which can only be +12 V, 0 or -12 V.
+
+<Scene name="feedback-control/bang-bang">
+A model, not a real robot. At the start the band is 0.25 in and the loop looks at the position every 100 ms. Press play and watch the output. Then drag the loop period down to 10 ms, then raise the stop band.
+</Scene>
+
+With the starting values the robot never settles. It shoots past 24, and the controller notices only at its next look. It slams into reverse, swings back through 24 and past it the other way, and so on. Once the first overshoot is over, the position swings between about 21.4 and 28.1 inches, and the swing doesn't shrink. An oscillation that keeps the same size and never dies out is a <Term id="limit-cycle">limit cycle</Term>. It isn't a one-off overshoot: the loop produces it, run after run.
+
+The reason is in what the rule doesn't know. It sees only the position. At 23 inches, "go forward" is the right answer if the robot is crawling, and the wrong one if it's doing 50 inches per second, because it's about to be past the target. The controller can't tell those apart, so it can't begin braking early. Momentum carries the robot through the line, the sign of the error flips, and the output flips with it, by which time the robot is already past. Each correction arrives after it was needed, and that's what <Term id="oscillation">oscillation</Term> is.
+
+### The loop period
+
+Drag the loop period up to 200 ms. The swing grows, to between about 17 and 30 inches. Between two looks the robot is on its own: at this model's top speed of 55 inches per second it covers 5.5 inches in 100 ms with the output frozen. A slower loop acts on older information, so it brakes later and overshoots further.
+
+The number of looks per second is the <Term id="loop-rate">loop rate</Term>. The `pros::delay(10)` in your code gives roughly 100 looks a second, plus however long the rest of the loop takes. The model's 55 inches per second is lower than the 76.6 from [Motor Encoders](../../sensors/motor-encoders/#from-motor-degrees-to-inches), which is the no-load figure for your wheels, so on the real robot a 10 ms gap is up to about 0.8 inch, and a real drivetrain behaves differently in other ways too.
+
+Now drag the period down to 10 ms. The wide swing is gone, but the output isn't calm. With the band at 0 it flips between +12 V and -12 V 24 times in 3 seconds and never comes to rest, while the position wobbles by less than an inch. That fast flipping around the target is <Term id="chatter">chatter</Term>. The error is tiny, so the robot looks like it has arrived, but the controller is slamming between full forward and full reverse the whole time. Put the band back at 0.25 and the chatter dies out and the robot comes to rest at 2.8 seconds, a tenth of an inch past.
+
+Chatter is probably hard on the hardware. Reversing a spinning motor at full voltage draws a large current, and the gears feel every reversal. The V5 motor [cuts its allowed current in steps when it overheats](../../first-robot-program/first-autonomous/#why-the-same-program-lands-in-different-places), so a chattering controller can leave you with a motor delivering less than it should. The model has none of this, though. It has no gear play and no motor lag, so a real robot tends to do worse than the scene, not better.
+
+### The stop band
+
+Go back to 100 ms and raise the stop band. By 2 inches the robot comes to rest at 22.1 inches, 1.9 short, after about 2.3 seconds. It overshoots, reverses, coasts into the stripe where the output is 0, and drag and friction stop it before the next look.
+
+The band does that by giving up accuracy. The robot can stop anywhere inside it, and the controller won't do anything about a robot that stopped 1.9 inches short. A wider band doesn't land it closer. At a 10 ms period a 4 inch band ends 2.5 inches past the target, and a 5 inch band ends 4.0 past, because the power is cut early and the robot coasts the rest of the way. An 8 inch band lands within 1 inch, by luck: the coast happens to match. A wide band trades a swing for a robot that has stopped in the wrong place, with the controller satisfied.
+
+A home thermostat has the same trouble. It turns the furnace on below the set temperature and off above it, and if it switched at exactly 70, the furnace would click on and off every few seconds as the room hovered around 70. So thermostats use <Term id="hysteresis">hysteresis</Term>: different thresholds for turning on and off, say on below 69 and off above 71. Between the two it keeps whatever it was doing. That's slightly different from the symmetric stop band here, which is off in between, but the cure is the same: a gap where the controller leaves things alone, in exchange for a room that's anywhere between 69 and 71.
+
+## What experts do with it
+
+Bang-bang looks like the beginner's controller that engineers outgrow. It isn't, and two cases show why.
+
+**Fastest possible stop at a target.** Suppose the only limit on the robot is that its motors can't give more than 12 V. Then the quickest way to reach 24 inches and stop there is bang-bang: full power forward, then full reverse, with exactly one switch at exactly the right moment. Any gentler plan leaves the motors below their limit for some of the trip. A controller that reaches the target in the least possible time under the output limits is called <Term id="time-optimal-control">time-optimal control</Term>.
+
+In this scene's model, the switch comes at 21.4 inches, with the robot already moving at about 53 inches per second, and the robot stops on 24.0 after 0.66 seconds. The runs in the scene that do come to rest take between 1.2 and 2.8 seconds. The catch is in "exactly". A switch one inch late leaves the robot one inch past the target, and the controller only finds out afterward. Placing the switch needs a good model of how the robot behaves. It's also an idealization: it assumes voltage is the only limit, and real drivetrains are also limited by how hard the wheels grip the tile and by the current the motors may draw. The switching point moves with the floor and the load, so a fixed 21.4 would be wrong on another day. Fixing that is a feedback job again.
+
+**Flywheels.** A flywheel's job isn't to stop at a position but to hold a speed. It has a lot of inertia, so a 10 ms loop changes its speed very little between looks, and it never needs to run backward. Full power below the target speed and off above it is a reasonable rule for that, and some teams control flywheels this way. Check team code and engineering notebooks to see how common it is. It should recover quickly after a game piece takes some speed, because it goes straight to full power, and the speed ripples a little around the target. It works because the flywheel has the inertia to smooth things out and has no need to stop at an exact spot. The thermostat's trick helps here too: switch on below the target minus a little, and off above it plus a little.
+
+<ReadTheDocs>
+Bang-bang's "off" state hides a choice. The C++ page for `move_voltage` doesn't say, but the C version of the same function does: open [`motor_move_voltage`](https://purduesigbots.github.io/pros-doxygen-docs/group__c-motors.html#gaec0d8c25cf301db219e14d4120111772) and find its note about brake modes. Does sending 0 V brake the robot, or let it coast? Then find the function that stops a motor using its brake mode, and the brake modes listed under <Api sym="motors/set_brake_mode" />. Which one would make the robot stop fastest inside the stop band?
+</ReadTheDocs>
+
+## How hard should it push?
+
+Look at what the output did in the scene. It was 12 V when the robot was 20 inches short and 12 V when it was 1.1 inches short. It was -12 V for a robot barely past the line and -12 V for one well past it. A controller that pushes the same way regardless of the size of the error can only be right by luck, and the luck depends on the speed, the load and the loop rate. What the robot needs is a push that fits the moment: hard when the target is far away, gentle as it closes in, and ready to brake before it gets there. How hard should it push at each moment? [PID](../pid/) is the most common answer.
+
+<Check prompt="In the first scene, the closed loop still overshoots. Could the open loop version be fixed by tuning a better time? Does that make closing the loop pointless?">
+Tuning a better time fixes the open loop only for the day it was tuned. The robot with a heavy load needs a longer time, the empty one a shorter one, and the program can't tell which it is. The closed loop doesn't need to know. It reads the wheels each pass, so it adapts without any retuning, which is the thing the open loop can't do. It still overshoots, because its output rule is crude. Closing the loop and choosing the rule are two separate problems, and this page only did the first one properly.
+</Check>
+
+<Check prompt="In the bang-bang scene, a robot runs a 100 ms loop with a 0.25 inch stop band and never settles. You may change one slider. Which one, which way, and what do you give up?">
+Raise the stop band, to about 2 inches. The robot then coasts into a region where the output is 0, and friction stops it before the next look, so the oscillation ends. What you give up is accuracy: it can stop anywhere inside the band, 1.9 inches short in the scene. Lowering the loop period also ends the big swing, since the robot spends less time blind between looks, but at 10 ms it leaves chatter, with the output reversing again and again. Your robot already loops at 10 ms, so on the real robot the band is the setting you have.
+</Check>
+
+<Check prompt="Your `driveBangBang` has `STOP_BAND = 0.0` and the exit test `std::fabs(error) <= STOP_BAND && std::fabs(speed) < STILL_SPEED`. The robot sits at 24.00 inches, perfectly still. Does the loop exit? What would you change?">
+Almost certainly not. The encoder reports in small steps, and `error` is a double that is practically never exactly 0.0, so the first half of the test fails. With a band of 0 the output is also never 0, so the robot never stays still. The timeout is the only thing that ends the loop. Use a band that matches what the sensor can resolve and the hardware can hold, such as 0.5 or 1 inch, and keep the timeout in either case.
+</Check>
