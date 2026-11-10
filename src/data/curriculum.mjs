@@ -53,10 +53,11 @@ export const curriculum = [
         ['smart-pointers', 'Smart Pointers'],
         ['vector', 'std::vector'],
     ]},
-    { label: 'Knowing Where You Are', blurb: 'Odometry: tracking wheels and the math that turns their readings into a position on the field.', dir: 'localization', pages: [
+    { label: 'Knowing Where You Are', blurb: 'Odometry: tracking wheels, the math that turns their readings into a position on the field, and correcting drift with distance sensors.', dir: 'localization', pages: [
         ['why-wheel-odometry', 'Why Wheel Odometry'],
         ['tracking-wheels', 'Tracking Wheels'],
         ['position-tracking-math', 'The Math of Position Tracking'],
+        ['monte-carlo-localization', 'Monte Carlo Localization'],
     ]},
     { label: 'Following Paths', blurb: 'Pure pursuit and boomerang, and how to choose between them.', dir: 'following-paths', pages: [
         ['pure-pursuit', 'Pure Pursuit'],
@@ -86,6 +87,7 @@ const unwritten = new Set([
     'localization/why-wheel-odometry',
     'localization/tracking-wheels',
     'localization/position-tracking-math',
+    'localization/monte-carlo-localization',
     'following-paths/pure-pursuit',
     'following-paths/boomerang',
     'following-paths/choosing-a-follower',
