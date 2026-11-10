@@ -91,7 +91,7 @@ void driveBangBang(double target) {
 }
 ```
 
-The output is in millivolts, so 12000 is the most the motors can be given. It uses <Api sym="motors/move_voltage" /> rather than `move_velocity`, and the [PID page](../pid/#why-move_voltage) explains why. The loop ends with <Api sym="rtos/delay" /> for 10 ms, as on [Driver Control](../../first-robot-program/driver-control/#why-the-loop-has-a-delay), and uses [`pros::millis()`](https://purduesigbots.github.io/pros-doxygen-docs/group__c-rtos.html#gacd8d13c328bebdf9eddea27ff9448c2d) for the time limit, as on the distance sensor page.
+The output is in millivolts, so 12000 is the most the motors can be given. It uses <Api sym="motors/move_voltage" /> rather than `move_velocity`, and the [PID page](../pid/#why-move_voltage) explains why. The loop ends with <Api sym="rtos/delay" /> for 10 ms, as on [Driver Control](../../first-robot-program/driver-control/#why-the-loop-has-a-delay), and uses [`pros::millis()`](https://purduesigbots.github.io/pros-doxygen-docs/group__c-rtos.html#gacd8d13c328bebdf9eddea27ff9448c2d) for the time limit, as in the homing routine on [Limit and Bump Switches](../../sensors/limit-and-bump-switches/#finding-a-known-position).
 
 Set `STOP_BAND` to 0 and the exit never fires, because the error is almost never exactly 0 and the robot is almost never still. The robot swings back and forth until the timeout cuts in. Try that in the scene before you try it on a robot.
 

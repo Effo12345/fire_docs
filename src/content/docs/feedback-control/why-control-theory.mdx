@@ -40,7 +40,7 @@ Press play at the starting 10 degree bump. Then set the bump to 0 and raise it a
 
 With the 10 degree bump, the timed robot ends 7.3 inches from the target, and at 15 degrees it ends 11.0 inches away. It drives its tuned 2.0 seconds in whatever direction it was knocked toward, and it can't tell. The bottom robot ends within a tenth of an inch of the target at either size. At 10 degrees it gets pushed about 0.9 inches off the line on the way, and at 15 about 1.4.
 
-How it steers back is a black box on this page, and [Closing the Loop](../closing-the-loop/) opens it. What matters here is that it never needs to know a bump happened. It only knows it's an inch off the line right now. So one idea covers a defender, a heavy load and a hot motor, with no code for any of them.
+How it steers back is a black box on this page. [Closing the Loop](../closing-the-loop/) starts to open it, and [PID](../pid/) finishes the job. What matters here is that it never needs to know a bump happened. It only knows it's an inch off the line right now. So one idea covers a defender, a heavy load and a hot motor, with no code for any of them.
 
 ## Drawing a control system
 
@@ -52,7 +52,7 @@ Watch the diagram build. Find the point where the sensor and the arrow back to t
 
 Each word in the diagram is vocabulary a judge or an engineer will expect from you:
 
-- The **plant** is the physical thing being controlled. For your drive, it's the whole drivetrain, with its wheels, weight and friction. The word comes from industry, where it meant the factory or machine being run.
+- The <Term id="plant">plant</Term> is the physical thing being controlled. For your drive, it's the whole drivetrain, with its wheels, weight and friction. The word comes from industry, where it meant the factory or machine being run.
 - The code sends a command to the <T id="actuator">actuator</T>, here the drive motors. The <Term id="actuator-output">actuator output</Term> is what they really deliver to the plant, mainly torque, and it can differ from the command. You asked for 12000 mV, and a motor that has cut its current limit delivers less push than the same command did when it was cool.
 - A <T id="sensor">sensor</T> reads the result and sends the measurement back to the code. A plant, its actuators, its sensors and the code that decides, joined in a loop, make a <Term id="control-system">control system</Term>.
 
@@ -89,7 +89,7 @@ The first leg is fine, and each of the three turns adds 2 degrees, so the fourth
 </Check>
 
 <Check prompt="A motor pushes against a wall and can't turn. From the ReadTheDocs above, which reading changes most, and which one barely moves?">
-`get_voltage` reports the millivolts being delivered to the motor, which stays near what you commanded, so it barely moves. `get_current_draw` (mA) and `get_torque` (Nm) are what rise as the motor strains. That is the gap between a command and an actuator output.
+`get_voltage` reports the millivolts being delivered to the motor, which should stay close to what you commanded, so it barely moves. `get_current_draw` (mA) and `get_torque` (Nm) are what rise as the motor strains. That is the gap between a command and an actuator output.
 </Check>
 
 <Check prompt="An arm lifts a game piece, and a potentiometer on its joint reports the angle. Name the plant, the actuator, the sensor and a disturbance.">
