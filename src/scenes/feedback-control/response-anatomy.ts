@@ -38,7 +38,7 @@ export default defineScene({
             yLabel: 'position (in)',
         });
         axes.hline(TARGET, { color: color.target, width: 1.5, dash: '5 5' });
-        draw.text('setpoint', 696, axes.sy(TARGET) + 18, { color: color.target, size: 14, anchor: 'end' });
+        draw.text('setpoint', 672, axes.sy(TARGET) + 18, { color: color.target, size: 14, anchor: 'end' });
         const curve = axes.curve({ color: color.value });
 
         const riseY = axes.sy(5);

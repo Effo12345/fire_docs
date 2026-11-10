@@ -9,18 +9,19 @@ import ReadTheDocs from '../../../components/ReadTheDocs.astro';
 import SourceCard from '../../../components/SourceCard.astro';
 import Hl from '../../../components/Hl.astro';
 import Term from '../../../components/Term.astro';
+import T from '../../../components/T.astro';
 
-In [Closing the Loop](../closing-the-loop/), the robot started checking its own position and correcting itself. The question left over is how hard it should push at each moment. PID is the most widely used answer in robotics, and it needs only one number to work with.
+In [Closing the Loop](../closing-the-loop/), the robot started checking its own position on every pass, which makes it a <T id="closed-loop">closed loop</T>. Its <T id="bang-bang-control">bang-bang</T> rule could only answer with full forward or full reverse, whatever the size of the mistake, and that is why it swung back and forth. The question left over is how hard it should push at each moment. PID is the most widely used answer in robotics, and it needs only one number to work with.
 
 ## Start with the error
 
-Suppose the robot should stop at a <Hl c="target">target</Hl> 24 inches away. Control engineers call the value you're aiming for the <Term id="setpoint">setpoint</Term>. At any moment, subtracting the robot's <Hl c="value">position</Hl> from the setpoint gives the <Term id="control-error"><Hl c="error">error</Hl></Term>: how far it still has to go.
+Suppose the robot should stop at a <Hl c="target">target</Hl> 24 inches away. Control engineers call the value you're aiming for the <T id="setpoint">setpoint</T>. At any moment, subtracting the robot's <Hl c="value">position</Hl> from the setpoint gives the <T id="control-error"><Hl c="error">error</Hl></T>: how far it still has to go.
 
 $$
 \err{\text{error}} = \tar{\text{target}} - \val{\text{position}}
 $$
 
-The simplest useful idea is to push in proportion to that number. This is the <Term id="proportional-term">proportional term</Term>, the **P** in PID:
+The simplest useful idea is to make the <T id="control-output">control output</T>, the push sent to the motors, proportional to that number. This is the <Term id="proportional-term">proportional term</Term>, the **P** in PID:
 
 $$
 \foc{\text{output}} = k_P \times \err{\text{error}}
@@ -34,7 +35,7 @@ Raise $k_P$ and the robot gets there faster, but sails further past the target. 
 
 P alone has two problems, and you can see both in the animation:
 
-- **It overshoots.** Pushing hard gets the robot moving fast, and it can't stop instantly. By the time the error reaches zero, it's still moving, so it goes past the setpoint. This is called <Term id="overshoot">overshoot</Term>, and at a high enough gain, it turns into <Term id="oscillation">oscillation</Term>, where the robot swings back and forth.
+- **It overshoots.** Pushing hard gets the robot moving fast, and it can't stop instantly. By the time the error reaches zero, it's still moving, so it goes past the setpoint. This is called <Term id="overshoot">overshoot</Term>, and at a high enough gain, it turns into <T id="oscillation">oscillation</T>, where the robot swings back and forth.
 - **It stops short.** Close to the target, the output is tiny. Once it's too small to overcome friction, the robot stops with some error left over, and nothing changes after that. The leftover is called <Term id="steady-state-error">steady-state error</Term>.
 
 The other two terms each fix one of these.
@@ -66,6 +67,14 @@ The <Term id="integral-term">integral term</Term> uses the area under the error 
 In the first animation, set a low $k_P$ so the robot stops short, then slowly raise $k_I$.
 
 The danger with I is that this total also grows while the robot is far away and already at full power, then has to be worked off after it arrives. That's called <Term id="integral-windup">integral windup</Term>, and it's why the code below only adds to the total once the robot is close to the target.
+
+The next scene is a long drive, 96 inches, with $k_P = 0.6$ and $k_D = 0.05$. It starts with $k_I = 0.3$ and no limit on when the total may grow.
+
+<Scene name="feedback-control/pid-windup">
+Press play with the I zone at 100 (off). The robot is 96 inches short for a long time, so the <Hl c="focus">I term</Hl> climbs to its 12 V cap long before the robot arrives, then has to be undone. Drag the I zone down to 12 and compare the overshoot, then set $k_I$ to 0.
+</Scene>
+
+With the zone off, the robot overshoots by about 16.7 inches and needs about 7.5 seconds to come to rest within an inch. With a zone of 12 inches, the same gains give no overshoot and a settling time of about 2.4 seconds. The total only started growing inside 12 inches, so there was little to undo. Set $k_I$ to 0 with the zone off and there's nothing to wind up, but the robot stops short of 96 and never settles within an inch, which is the problem the I term was added to fix. Windup is the price of an I term that listens to the error from a distance. The model also stops the total at the point where I alone would ask for 12 V. Without that limit the overshoot would be worse.
 
 ## In code
 
@@ -115,13 +124,41 @@ void driveDistance(double target) {
 }
 ```
 
-The `std::clamp` line is there because motors have a limit. Ask for more than 12 volts and you'll still only get 12. That's called <Term id="saturation">saturation</Term>, and it's why a high $k_P$ doesn't make the robot any faster once it's at full power.
+The `std::clamp` line is there because motors have a limit. Ask for more than 12 volts and you'll still only get 12. That's called <Term id="saturation">saturation</Term>, and it's why a high $k_P$ doesn't make the robot any faster once it's at full power. The motors get <Api sym="motors/move_voltage" />, not `move_velocity`, and [that choice matters](#why-move_voltage) enough to get its own section below.
 
-### Why `move_voltage`?
+### Timeouts
+
+The `while(true)` above waits until the robot is close and nearly stopped. Pressed against a wall, it never is, and the rest of the autonomous never runs. [Closing the Loop](../closing-the-loop/) gave the bang-bang drive a time limit, and PID gets the same one. Take the start time from [`pros::millis()`](https://purduesigbots.github.io/pros-doxygen-docs/group__c-rtos.html#gacd8d13c328bebdf9eddea27ff9448c2d) before the loop, and leave when the elapsed time passes the limit.
+
+```cpp nocheck
+const std::uint32_t TIMEOUT_MS = 3000;
+std::uint32_t startTime = pros::millis();
+
+// Leaves when the time is up, as well as when the exit test passes
+while(pros::millis() - startTime < TIMEOUT_MS) {
+    // ... the PID loop ...
+
+    pros::delay(10);
+}
+
+// Runs either way, so the motors always stop
+leftDrive.move_voltage(0);
+rightDrive.move_voltage(0);
+```
+
+Pick the limit a bit over the settling time you measured, so a healthy move never hits it. When it does fire, the motors stop and the autonomous carries on from wherever the robot ended up. That costs some accuracy, and saves the rest of the period from one jam. The stop at the end is `move_voltage(0)`, which isn't a brake command, as the next section says.
+
+<ReadTheDocs>
+Open the `pros::millis` link above. What type does it return, and since when does it count? The answer is in the last Check on this page.
+</ReadTheDocs>
+
+## Why `move_voltage`?
 
 PROS offers several ways to command a motor, and the choice matters here. <Api sym="motors/move_velocity" /> doesn't set the motor's power directly. You give it a speed, and a controller running inside the motor adjusts the power to hold that speed.
 
-Run your PID on top of that, and you have one controller commanding another. Each reacts to the other's corrections, so tuning becomes much harder. <Api sym="motors/move_voltage" /> applies the voltage you ask for, which leaves your controller in charge.
+Run your PID on top of that, and you have one controller commanding another. Each reacts to the other's corrections, so tuning becomes much harder. <Api sym="motors/move_voltage" /> applies the voltage you ask for, which leaves your controller in charge. The drivetrain, the thing being driven, is the <T id="plant">plant</T>, and your code is the only controller on it.
+
+One more fact comes from the header for the C version of the function, `motor_move_voltage`: it "will not respect brake modes". Sending 0 doesn't apply a brake. It's zero volts, and the brake mode is ignored.
 
 <ReadTheDocs>
 Open <Api sym="motors/move_voltage" /> and <Api sym="motors/move_velocity" /> in the PROS API. What range of values does each accept, and what units are they in? Then look up [`std::clamp`](https://en.cppreference.com/w/cpp/algorithm/clamp) on cppreference, which every controller from here on uses.
@@ -137,30 +174,208 @@ This is P control alone, with $k_P = 1$. Every controller you tune from now on c
 
 They pull against each other. A shorter <Term id="rise-time">rise time</Term> usually means more overshoot, and getting rid of overshoot usually means a longer rise. <Term id="settling-time">Settling time</Term> is often the number you care about most, since it tells you when the robot can safely start its next move. In the [SD card chapter](../../seeing-inside/sd-card-logging/), you'll learn to log real runs and measure them yourself.
 
+## Turning with PID
+
+[The Inertial Sensor](../../sensors/inertial-sensor/#wraparound-and-the-shortest-turn) ended with a `turnToHeading` that used a fixed voltage, and it said PID would replace that. Here's the replacement. It has the same name and the same job, so keep this one and delete the old one. The <T id="heading">heading</T> is the target, the error is the shortest way around, and the output goes to the two sides with opposite signs.
+
+Two things are different from driving. First, the error is an angle, so it needs <T id="angle-wrapping">wrapping</T>. Heading 350 with a target of 10 is a 20 degree turn, and plain `target - heading` says -340. [`shortestTurn`](../../sensors/inertial-sensor/#wraparound-and-the-shortest-turn) from the inertial sensor page fixes that, and [Units and Coordinate Frames](../units-and-frames/#wrapping-angles) covers wrapping in general. Second, the gains need to be in their own units. Volts per inch don't mean anything for a turn, so these are millivolts per degree.
+
+```cpp
+// From the Inertial Sensor page: degrees to turn, -180 to 180, clockwise positive
+double shortestTurn(double target, double current);
+
+// Turns in place to face a compass heading. Replaces the fixed-voltage version
+void turnToHeading(double target) {
+    // Millivolts per degree, per degree-second, and per degree per second
+    const double kP = 200.0;
+    const double kI = 150.0;
+    const double kD = 10.0;
+    const double loopSeconds = 0.01;
+    const std::uint32_t TIMEOUT_MS = 2000;
+
+    double heading = imu.get_heading();
+
+    // PROS_ERR_F is infinity, which means the read failed
+    if(std::isinf(heading)) {
+        return;
+    }
+
+    double error = shortestTurn(target, heading);
+    double lastError = error;
+    double errorSum = 0.0;
+    std::uint32_t startTime = pros::millis();
+
+    while(pros::millis() - startTime < TIMEOUT_MS) {
+        heading = imu.get_heading();
+
+        if(std::isinf(heading)) {
+            break;
+        }
+
+        error = shortestTurn(target, heading);
+
+        // Start the total over once the robot passes the target
+        if(error * lastError < 0.0) {
+            errorSum = 0.0;
+        }
+
+        if(std::abs(error) < 15.0) {
+            errorSum += error * loopSeconds;
+        }
+
+        // Slope of the wrapped error, so the 0/360 jump never shows up
+        double errorChange = (error - lastError) / loopSeconds;
+        lastError = error;
+
+        double output = kP * error + kI * errorSum + kD * errorChange;
+        output = std::clamp(output, -12000.0, 12000.0);
+
+        // Positive error is clockwise: left side forward, right side back
+        leftDrive.move_voltage(output);
+        rightDrive.move_voltage(-output);
+
+        if(std::abs(error) < 2.0 && std::abs(errorChange) < 10.0) {
+            break;
+        }
+
+        pros::delay(10);
+    }
+
+    leftDrive.move_voltage(0);
+    rightDrive.move_voltage(0);
+}
+```
+
+Walk through the signs. The IMU counts clockwise as positive, so a target to the right of the robot gives a positive `shortestTurn`. A positive output on `leftDrive` and a negative one on `rightDrive` turns the robot clockwise, as the inertial sensor page set up, so `output` goes to the left and `-output` to the right. If your robot spins away from the target, check this pair of signs first, before touching a gain.
+
+The derivative is where wrapping bites a second time. Subtracting two raw headings across the seam, `359 - 1`, gives a rate of 358 degrees in one loop, an enormous kick. The code takes the difference of the wrapped errors instead, and those are smooth across 0 and 360 because `shortestTurn` already handled the jump. The first `lastError` is set from the first reading, so the first pass has no jump either. The only place a wrapped error can flip is exactly 180 degrees away, where either direction is as short as the other.
+
+The error changes sign when the robot passes the target. The total built up on the other side was pushing toward the target, and now it pushes away from it, so the code throws it out at that moment. That's a second guard against windup, next to the 15 degree zone. The failed-read check is the one the inertial sensor page taught, and the code checks it twice because the function reads the sensor before the loop and inside it. The exit asks for a small error and slow spin, and the timeout covers the case where neither happens. Two seconds is a guess for a 90 degree turn on this robot. Measure your own, ideally from a logged run.
+
+<Scene name="feedback-control/turn-wrap">
+A robot seen from above, with a compass dial around it. The <Hl c="target">green dot</Hl> is the target. With wrapping on and the starting values, it turns 20 degrees clockwise from 350 to 10. Press play, then set the wrap slider to 0.
+</Scene>
+
+With the error wrapped, the robot makes a 20 degree turn, settles at about 0.6 seconds, and the error the controller sees (red, lower graph) starts at 20 and shrinks. With wrapping off, the controller reads -340 at the start, asks for full power, and swings the long way round, counterclockwise, 340 degrees where 20 would do. It reaches 10 at about 1.1 seconds, moving too fast to stop, and carries past 0. The heading jumps from 0 to 359, and the error jumps from about 9 to about -345 with it, so the controller floors the power again and the robot goes around once more. In the 3 seconds shown it has covered more than 1000 degrees and never settled.
+
+Now try the case where a small mistake becomes a big one. Start at 20 and target 0, with wrapping off and the starting gains. The robot has a small turn to make, but it carries a little past 0, the heading becomes 359, and the plain error becomes -359. From there it never comes back: it spins nearly 900 degrees in 3 seconds. Switch wrapping on and the same gains turn it 20 degrees and stop. For the other extreme, try a 90 degree turn from 0, with $k_D$ at 0 and then 25. At 25, the robot overshoots by about 2 degrees and settles at 0.8 seconds. At 0, it's about 18 degrees past and settles at about 2.6 seconds.
+
+The scene is a model, like the first one. Real robots have wheel scrub, battery sag and floor grip that it leaves out, so the gains in it aren't the ones to copy. The motion is what to look at.
+
+### `get_heading` or `get_rotation`?
+
+<Api sym="imu/get_heading" /> returns 0 up to 360 and wraps. <Api sym="imu/get_rotation" /> doesn't wrap, so a full turn clockwise from 0 reads 360, and another one 720. Both count clockwise as positive, and both return `PROS_ERR_F` if the read fails.
+
+Use `get_heading` when the target is a direction on the field, such as "face 90", as in `turnToHeading`. You always wrap the difference, and the sensor's number stays honest to the compass. Use `get_rotation` when you think in turns relative to where you are, such as "turn 90 more". Then the target is `rotation + 90`, no wrapping is needed, and the derivative never sees a seam. The cost is that a turn of 270 now really goes 270 instead of the short 90 the other way. Either way, never wrap a stored total. Wrap the difference, as [Units and Coordinate Frames](../units-and-frames/#wrapping-angles) puts it.
+
+### Driving straight
+
+A drive that only watches distance doesn't notice if the robot curves. The IMU can notice. Remember the heading when you start, and add a correction to the two sides that grows with how far the heading has drifted. It has the same form as `turnToHeading`, but the correction is added to the forward output, not used as the whole of it.
+
+```cpp
+// From the Inertial Sensor page
+double shortestTurn(double target, double current);
+
+// Drives target inches and holds the starting heading
+void driveStraight(double target) {
+    resetDriveDistance();
+
+    const double kP = 400.0;
+    const double kD = 100.0;
+    const double kHeading = 100.0;  // Millivolts per degree off course
+    const double loopSeconds = 0.01;
+    const std::uint32_t TIMEOUT_MS = 3000;
+
+    double startHeading = imu.get_heading();
+
+    if(std::isinf(startHeading)) {
+        return;
+    }
+
+    double lastError = target - getDriveDistance();
+    std::uint32_t startTime = pros::millis();
+
+    while(pros::millis() - startTime < TIMEOUT_MS) {
+        double heading = imu.get_heading();
+
+        if(std::isinf(heading)) {
+            break;
+        }
+
+        double error = target - getDriveDistance();
+        double errorChange = (error - lastError) / loopSeconds;
+        lastError = error;
+
+        double forward = kP * error + kD * errorChange;
+
+        // Heading drifted clockwise means a negative number here, which slows the left side
+        double correction = kHeading * shortestTurn(startHeading, heading);
+        correction = std::clamp(correction, -3000.0, 3000.0);
+
+        // Leave room for the correction, or saturation will cut it off
+        double room = 12000.0 - std::abs(correction);
+        forward = std::clamp(forward, -room, room);
+
+        leftDrive.move_voltage(forward + correction);
+        rightDrive.move_voltage(forward - correction);
+
+        if(std::abs(error) < 0.5 && std::abs(errorChange) < 1.0) {
+            break;
+        }
+
+        pros::delay(10);
+    }
+
+    leftDrive.move_voltage(0);
+    rightDrive.move_voltage(0);
+}
+```
+
+The line to look at is the one with `room`. At the start of a long drive, `forward` wants more than 12000. Suppose it asks for 15000 and the heading has drifted so that the correction is +2000. The left side gets 17000, and the right side gets 13000. Both are clamped by the motor to 12000, and the two sides are equal again. The correction is gone exactly when the robot needed it, and the robot keeps curving. Scaling the forward part down first leaves a gap between the sides that survives. The price is a slightly slower start. This code leaves out the I term to stay short. The I term and the rest of the straight-line version are the same as `driveDistance`.
+
 ## Tuning
 
-<Term id="tuning">Tuning</Term> means finding gains that work for your particular robot. These values depend on its weight, gearing, and wheels, so there's no way around testing them. Start with all three gains at zero, then:
+<Term id="tuning">Tuning</Term> means finding gains that work for your particular robot. They depend on its weight, gearing and wheels, so there's no way around testing them. Start with all three gains at zero, then:
 
 1. **Raise $k_P$** until the robot reaches the target quickly and overshoots by a little.
 2. **Raise $k_D$** until the overshoot is gone. If the robot starts to jitter or sound rough, $k_D$ is too high.
 3. **Raise $k_I$ only if you need to.** If the robot consistently stops a little short, add a small $k_I$.
-4. **Test at several distances.** A gain that's perfect for 24 inches might overshoot at 48. A short move and a long one will tell you much more than one move repeated.
+4. **Test at several distances.** A gain that's perfect for 24 inches might overshoot at 48. A short move and a long one tell you much more than one move repeated.
 
-Change one gain at a time, and keep notes. A battery that's running low will change how the robot behaves, so don't tune on one.
+Change one gain at a time, and keep notes. Tune `turnToHeading` separately from the drive, with the same steps. Millivolts per degree aren't millivolts per inch, and spinning in place drags every wheel sideways, so gains that drive well can turn badly. Test a 90 degree turn, a 180 and a small 10 degree one. Small turns are the hardest, because the output is small and friction is a large share of it.
+
+Two things change the robot under you. A tired battery sags under load and can fall short of the large outputs you ask for, so the same gains act weaker, and a robot carrying game pieces needs more push than an empty one. Tune with a charged battery and the load the robot will really have, and recheck after a mechanism change. Your gains also carry your units: a $k_P$ of 400 means 400 mV per inch, and switching to encoder ticks or meters needs a different number, found by the [unit conversion](../units-and-frames/) you already know. Never copy another team's gains without knowing their units, wheel size and gear ratio.
+
+Watching only tells you so much, and two runs that look the same can differ by half an inch. Log the time, the setpoint, the measurement and the output every loop, then compare the overshoot and settling time from [Reading a response](#reading-a-response) between runs. The [SD Card Logging](../../seeing-inside/sd-card-logging/) chapter covers how. A change that cut the overshoot from 3 inches to 1 is real. One that "looked better" might not be.
+
+### Reading the symptom
+
+What the robot does tells you which gain is wrong, if you watch carefully.
+
+- **It crawls and stops short, and doesn't move after that.** The output is too small to beat friction near the target. Raise $k_P$ a little, or use $k_I$, or the minimum output described below.
+- **It overshoots once and settles.** $k_D$ is too low or $k_P$ too high. Raise $k_D$ first, as in the first Check.
+- **It swings back and forth, and the swings don't shrink.** $k_P$ is too high for the robot's momentum. More $k_D$ may tame it, and if it doesn't, lower $k_P$.
+- **It buzzes or sounds rough while stopped or slow.** $k_D$ is amplifying noise in the reading. Lower it.
+- **It reaches the target, then creeps past it slowly.** $k_I$ is too high, and the total is carrying it. Lower it, or shrink the zone.
+- **It's fine on short moves and overshoots on long ones.** That's windup, as in the scene above. Check the zone, and check that you reset the total when the error changes sign.
+
+That last fix is the first of two common refinements. When the error changes sign, the total that was pushing one way now pushes the wrong way, and starting from zero beats working it off, which is what `turnToHeading` does. The second is a <Term id="minimum-output">minimum output</Term>. Friction means a small output does nothing, so a robot with 0.2 volts of push sits still, as the model's friction does in the scene. A small constant push in the direction of the error, enough to start the wheels turning, makes the end of the move crisper than waiting on the I term. Keep it small and switch it off inside the exit band, or it will chatter around the target like the bang-bang controller did.
+
+### Ziegler-Nichols, and its limits
+
+One classic recipe has a name, the <Term id="ziegler-nichols">Ziegler-Nichols method</Term>. Set $k_I$ and $k_D$ to zero and raise $k_P$ until the robot swings back and forth steadily, neither growing nor fading. Call that gain $K_u$ and measure the time of one swing, $T_u$. The original recipe from Ziegler and Nichols then sets $k_P = 0.6K_u$, $k_I = 1.2K_u / T_u$ and $k_D = 0.075K_u T_u$.
+
+It's a reasonable place to begin, but drivetrains are a poor fit for it. Friction and the 12 V limit mean the swing is rarely a clean steady one: it grows, stalls, or sticks. The recipe is also meant to be quick, not gentle, so its results overshoot more than you'd like. Treat what it gives as a first guess, then go back to the steps above.
 
 ## Going further
 
-PID has been refined for decades, and the version above is a starting point. Here's where it goes next. Experienced teams use all of these.
-
-**Exit conditions.** This loop ends when the robot is close and nearly stopped. Real code also adds a timeout, so that a robot pressed against a wall doesn't wait forever and throw away the rest of your autonomous.
+PID has been refined for decades, and the version above is a starting point. Here's where it goes next.
 
 **Derivative kick.** If the setpoint jumps while a controller is running, the error jumps too, and the slope of that jump is enormous for one loop. This spike is called <Term id="derivative-kick">derivative kick</Term>. A common fix is to take the derivative of the measurement instead of the error, since the robot's position can't jump.
 
 **Noise.** The derivative multiplies small differences between readings, so it amplifies sensor noise. Teams often smooth it with a low-pass filter.
 
 **Feedforward.** PID only reacts once there's an error. <Term id="feedforward">Feedforward</Term> adds output that you already know you need, such as the voltage to hold an arm up against gravity. It reduces how hard the feedback has to work.
-
-**Turning.** The same controller can turn the robot. Replace distance with the heading from [the Inertial Sensor](../../sensors/inertial-sensor/), and send opposite outputs to each side. Turning will need its own gains.
 
 <SourceCard
     title="An Introduction to PID Controllers"
@@ -172,4 +387,20 @@ A short, well-known guide written for VEX teams. It's a good second explanation 
 
 <Check prompt="Your robot reaches the target, shoots past it, comes back, and shoots past it again. Which gain would you change first, and which way?">
 Raise $k_D$, because oscillating around the target means the robot arrives moving too fast and the brake isn't strong enough. Lowering $k_P$ also reduces overshoot, but it makes every move slower, so try $k_D$ first.
+</Check>
+
+<Check prompt="A teammate changes `leftDrive.move_voltage(output)` in `turnToHeading` to `leftDrive.move_velocity(output)`, on the idea that it's smoother. The clamp to 12000 and the gains stay the same. What goes wrong?">
+Two things. The numbers now mean different units: `move_velocity` takes a speed, a few hundred at most for these cartridges, so the clamp at 12000 does nothing useful and a $k_P$ of 200 asks for a speed far beyond the motor's top, so it saturates at once. And the motor's own speed controller is now between your code and the wheels, reacting to what your controller does, which is the two-controllers-at-once problem from [Why `move_voltage`?](#why-move_voltage). The tuned gains stop meaning anything.
+</Check>
+
+<Check prompt="The robot faces 355 and the target is 5. With the code above and $k_P = 200$, ignoring the other terms, what does the left side get and which way does the robot turn? What would it get if the error weren't wrapped?">
+`shortestTurn(5, 355)` is 10, so the output is 200 times 10, 2000 mV. The left side gets +2000 and the right side -2000, and the robot turns clockwise 10 degrees. Without wrapping the error is 5 minus 355, which is -350, and 200 times that is -70000 mV. After the clamp that's -12000 on the left, so the robot spins counterclockwise at full power, the long way round.
+</Check>
+
+<Check prompt="`driveStraight` asks for `forward = 15000` while the heading error asks for `correction = 2000`. Without the `room` lines, what do the two sides get from the motors? With them, what do they get?">
+Without the lines, the sides are asked for 17000 and 13000, and the motors can give only 12000 to each, so they're equal and the correction is lost. With them, `room` is 10000 and `forward` is cut to 10000, so the sides get 12000 and 8000, and the robot keeps correcting, at a slower speed.
+</Check>
+
+<Check prompt="`turnToHeading` has `pros::millis() - startTime < TIMEOUT_MS`. What does `pros::millis()` return, and since when? Why is it written as a difference?">
+It returns milliseconds as a `std::uint32_t`, counted since PROS initialized, which is well before the autonomous starts. Compared on its own with 2000, the test would already be false. Subtracting the start time measures how long this loop has been running, which is what the limit is about.
 </Check>
